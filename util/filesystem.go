@@ -53,7 +53,7 @@ func init() {
 	case "netbsd":
 		dfOpt = []string{"-Pkl"}
 	default:
-		dfOpt = []string{"-P"}
+		dfOpt = []string{"-k"} // qts's df doesn't support `-P`
 	}
 }
 
