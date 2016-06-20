@@ -41,7 +41,7 @@ func (g *KernelGenerator) Generate() (interface{}, error) {
 		results[key] = str
 	}
 
-	results["os"] = "Linux"
+	results["os"] = "GNU/Linux"
 
 	return results, nil
 }
