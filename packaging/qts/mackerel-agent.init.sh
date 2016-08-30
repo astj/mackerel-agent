@@ -7,11 +7,12 @@
 
 NAME=mackerel-agent                  # Introduce the short server's name here
 
-[ -r /etc/default/$NAME ] && . /etc/default/$NAME
+ETC=$(dirname $0)/..
+[ -r $ETC/default/$NAME ] && . $ETC/default/$NAME
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DAEMON=${DAEMON:="/usr/bin/$NAME"}
-SCRIPTNAME=/etc/init.d/$NAME.sh
+SCRIPTNAME=$ETC/init.d/$NAME.sh
 LOGFILE=${LOGILE:="/var/log/$NAME.log"}
 PIDFILE=${PIDFILE:="/var/run/$NAME.pid"}
 ROOT=${ROOT:="/var/lib/$NAME"}
