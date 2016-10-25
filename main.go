@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -38,6 +39,19 @@ func (r *roleFullnamesFlag) Set(input string) error {
 var logger = logging.GetLogger("main")
 
 func main() {
+	// although the possibility is very low, mackerel-agent may panic because of
+	// a race condition in multi-threaded environment on some OS/Arch.
+	// So fix GOMAXPROCS to 1 just to be safe.
+	if os.Getenv("GOMAXPROCS") == "" {
+		runtime.GOMAXPROCS(1)
+	}
+	// force disabling http2 for now
+	godebug := os.Getenv("GODEBUG")
+	if godebug != "" {
+		godebug += ","
+	}
+	godebug += "http2client=0"
+	os.Setenv("GODEBUG", godebug)
 	cli.Run(os.Args[1:])
 }
 
@@ -126,8 +140,16 @@ func resolveConfig(fs *flag.FlagSet, argv []string) (*config.Config, error) {
 	}
 	conf.Roles = r
 
+	if conf.Verbose && conf.Silent {
+		logger.Warningf("both of `verbose` and `silent` option are specified. In this case, `verbose` get preference over `silent`")
+	}
+
 	if conf.Apikey == "" {
 		return nil, fmt.Errorf("Apikey must be specified in the config file (or by the DEPRECATED command-line flag)")
+	}
+
+	if conf.HTTPProxy != "" {
+		os.Setenv("HTTP_PROXY", conf.HTTPProxy)
 	}
 	return conf, nil
 }
@@ -166,6 +188,9 @@ func removePidFile(pidfile string) {
 }
 
 func start(conf *config.Config, termCh chan struct{}) error {
+	if conf.Silent {
+		logging.SetLogLevel(logging.ERROR)
+	}
 	if conf.Verbose {
 		logging.SetLogLevel(logging.DEBUG)
 	}

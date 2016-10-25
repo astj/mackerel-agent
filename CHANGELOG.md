@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.36.0 (2016-10-18)
+
+* don't use HTTP_PROXY when requesting cloud instance metadata APIs #285 (Songmu)
+* Add an option to output filesystem-related metrics with key by mountpoint #286 (astj)
+
+
+## 0.35.1 (2016-09-29)
+
+* support MACKEREL_PLUGIN_WORKDIR in init scripts #277 (Songmu)
+* Add platform metadata for Darwin #280 (astj)
+* Disable http2 for now #283 (Songmu)
+
+
+## 0.35.0 (2016-09-07)
+
+* built with Go 1.7 #266 (Songmu)
+* remove `func (vs *Values) Merge(other Values)` #268 (Songmu)
+* [incompatible] consider df  (used + available) as size of filesystem #271 (Songmu)
+* Remove DigitalOcean related comment/definition from spec/cloud.go #272 (astj)
+* Fix golint is not working on ci, and add some comment to pass golint #273 (astj)
+* Add linux distribution information to kernel spec #274 (ak1t0)
+* http_proxy configuration #275 (Songmu)
+* set PATH and LANG only in unix environment #276 (Songmu)
+* Ignore docker mapper storage in spec as well #278 (itchyny)
+
+
+## 0.34.0 (2016-08-18)
+
+* Reduce retry count on finding a host by the custom identifier #258 (itchyny)
+* suppress checker flooding when resuming from sleep mode #260 (Songmu)
+* truncate checker message up to 1024 characters #261 (Songmu)
+* commonalize spec.FilesystemGenerator around unix OSs #262 (Songmu)
+* define type DfStat,	remove dfColumnSpecs and refactor #263 (Songmu)
+
+
+## 0.33.0 (2016-08-08)
+
+* Fill the customIdentifier in EC2 #255 (itchyny)
+
+
+## 0.32.2 (2016-07-14)
+
+* fix GOMAXPROCS to 1 for avoiding rare panics #253 (Songmu)
+
+
+## 0.32.1 (2016-07-07)
+
+* Add user for executing a plugin #250 (y-kuno)
+
+
+## 0.32.0 (2016-06-30)
+
+* Added plugin check interval option #245 (karupanerura)
+
+
+## 0.31.2 (2016-06-23)
+
+* Refactor around metrics/linux/memory #242 (Songmu)
+* Don't stop mackerel-agent process on upgrading by debian package #243 (karupanerura)
+* add `silent` configuration key for suppressing log output #244 (Songmu)
+* change log level ERROR to WARNING in spec/spec.go #246 (Songmu)
+* remove /usr/local/bin from sample.conf #248 (Songmu)
+
+
 ## 0.31.0 (2016-05-25)
 
 * Post the custom metrics to the hosts specified by custom identifiers #231 (itchyny)

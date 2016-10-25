@@ -13,7 +13,7 @@ func specGenerators() []spec.Generator {
 		&specNetbsd.KernelGenerator{},
 		&specNetbsd.MemoryGenerator{},
 		&specNetbsd.CPUGenerator{},
-		&specNetbsd.FilesystemGenerator{},
+		&spec.FilesystemGenerator{},
 	}
 }
 
@@ -25,7 +25,7 @@ func metricsGenerators(conf *config.Config) []metrics.Generator {
 	generators := []metrics.Generator{
 		&metricsNetbsd.Loadavg5Generator{},
 		&metricsNetbsd.CPUUsageGenerator{},
-		&metrics.FilesystemGenerator{IgnoreRegexp: conf.Filesystems.Ignore.Regexp},
+		&metrics.FilesystemGenerator{IgnoreRegexp: conf.Filesystems.Ignore.Regexp, UseMountpoint: conf.Filesystems.UseMountpoint},
 		&metricsNetbsd.MemoryGenerator{},
 	}
 

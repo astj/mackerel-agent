@@ -43,11 +43,13 @@ type Config struct {
 	Conffile    string
 	Roles       []string
 	Verbose     bool
+	Silent      bool
 	Diagnostic  bool `toml:"diagnostic"`
 	Connection  ConnectionConfig
 	DisplayName string      `toml:"display_name"`
 	HostStatus  HostStatus  `toml:"host_status"`
 	Filesystems Filesystems `toml:"filesystems"`
+	HTTPProxy   string      `toml:"http_proxy"`
 
 	// Corresponds to the set of [plugin.<kind>.<name>] sections
 	// the key of the map is <kind>, which should be one of "metrics" or "checks".
@@ -64,10 +66,13 @@ type Config struct {
 type PluginConfigs map[string]PluginConfig
 
 // PluginConfig represents a section of [plugin.*].
-// `MaxCheckAttempts` option is used with check monitoring plugins. Custom metrics plugins ignore this option.
+// `MaxCheckAttempts`, `NotificationInterval` and `CheckInterval` options are used with check monitoring plugins. Custom metrics plugins ignore these options.
+// `User` option is ignore in windows
 type PluginConfig struct {
 	Command              string
+	User                 string
 	NotificationInterval *int32  `toml:"notification_interval"`
+	CheckInterval        *int32  `toml:"check_interval"`
 	MaxCheckAttempts     *int32  `toml:"max_check_attempts"`
 	CustomIdentifier     *string `toml:"custom_identifier"`
 }
@@ -94,7 +99,8 @@ type HostStatus struct {
 
 // Filesystems configure filesystem related settings
 type Filesystems struct {
-	Ignore Regexpwrapper `toml:"ignore"`
+	Ignore        Regexpwrapper `toml:"ignore"`
+	UseMountpoint bool          `toml:"use_mountpoint"`
 }
 
 // Regexpwrapper is a wrapper type for marshalling string

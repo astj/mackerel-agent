@@ -1,6 +1,6 @@
-// +build windows
+// +build !windows
 
-package windows
+package spec
 
 import "testing"
 

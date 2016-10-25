@@ -1,7 +1,7 @@
 sudo: false
 language: go
 go:
-- 1.6.2
+- 1.7
 env:
   global:
   - PATH=/home/travis/gopath/bin:$PATH DEBIAN_FRONTEND=noninteractive
@@ -23,7 +23,7 @@ script:
 after_script:
 - goveralls -coverprofile=.profile.cov
 before_deploy:
-- make rpm deb rpm-kcps deb-kcps rpm-stage deb-stage
+- make rpm deb rpm-kcps deb-kcps rpm-stage deb-stage tgz
 - go get github.com/aktau/github-release
 - mkdir -p ~/bin
 - git clone https://github.com/github/hub.git && cd hub && script/build -o ~/bin/hub && cd ..

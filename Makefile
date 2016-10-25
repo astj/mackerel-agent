@@ -8,7 +8,7 @@ CURRENT_VERSION = $(shell git log --merges --oneline | perl -ne 'if(m/^.+Merge p
 
 BUILD_LDFLAGS = "\
 	  -X github.com/mackerelio/mackerel-agent/version.GITCOMMIT=`git rev-parse --short HEAD` \
-	  -X github.com/mackerelio/mackerel-agent/version.VERSION=$(MACKEREL_AGENT_VERSION) \
+	  -X github.com/mackerelio/mackerel-agent/version.VERSION=$(CURRENT_VERSION) \
 	  -X github.com/mackerelio/mackerel-agent/config.agentName=$(MACKEREL_AGENT_NAME) \
 	  -X github.com/mackerelio/mackerel-agent/config.apibase=$(MACKEREL_API_BASE)"
 
@@ -25,7 +25,7 @@ test: lint
 
 build: deps
 	go build -ldflags=$(BUILD_LDFLAGS) \
-	-o build/$(MACKEREL_AGENT_NAME)
+	  -o build/$(MACKEREL_AGENT_NAME)
 
 run: build
 	./build/$(MACKEREL_AGENT_NAME) $(ARGS)
@@ -44,7 +44,7 @@ lint: deps
 crossbuild: deps
 	cp mackerel-agent.sample.conf mackerel-agent.conf
 	goxc -build-ldflags=$(BUILD_LDFLAGS) \
-	    -os="linux darwin freebsd netbsd" -arch="386 amd64 arm" -d . -n $(MACKEREL_AGENT_NAME)
+		-os="linux darwin freebsd netbsd" -arch="386 amd64 arm" -d . -n $(MACKEREL_AGENT_NAME)
 
 cover: deps
 	gotestcover -v -short -covermode=count -coverprofile=.profile.cov -parallelpackages=4 ./...
@@ -84,14 +84,14 @@ deb-kcps:
 	cd packaging/deb-build && debuild --no-tgz-check -uc -us
 
 rpm-stage:
-	make build MACKEREL_AGENT_NAME=mackerel-agent-stage GOOS=linux GOARCH=386
+	make build MACKEREL_AGENT_NAME=mackerel-agent-stage MACKEREL_API_BASE=http://0.0.0.0 GOOS=linux GOARCH=386
 	MACKEREL_AGENT_NAME=mackerel-agent-stage _tools/packaging/prepare-rpm-build.sh
 	rpmbuild --define "_sourcedir `pwd`/packaging/rpm-build/src" --define "_builddir `pwd`/build" \
 	      --define "_version ${CURRENT_VERSION}" --define "buildarch noarch" \
 				-bb packaging/rpm-build/mackerel-agent-stage.spec
 
 deb-stage:
-	make build MACKEREL_AGENT_NAME=mackerel-agent-stage GOOS=linux GOARCH=386
+	make build MACKEREL_AGENT_NAME=mackerel-agent-stage MACKEREL_API_BASE=http://0.0.0.0 GOOS=linux GOARCH=386
 	MACKEREL_AGENT_NAME=mackerel-agent-stage _tools/packaging/prepare-deb-build.sh
 	cd packaging/deb-build && debuild --no-tgz-check -uc -us
 
@@ -102,7 +102,7 @@ tgz:
 	mkdir -p $(tgz_dir)
 	cp mackerel-agent.sample.conf $(tgz_dir)/$(MACKEREL_AGENT_NAME).conf
 	cp build/$(MACKEREL_AGENT_NAME) $(tgz_dir)/
-	tar cvfz build/$(MACKEREL_AGENT_NAME)-latest.tar.gz -C ./build/tgz ./$(MACKEREL_AGENT_NAME)
+	tar cvfz build/$(MACKEREL_AGENT_NAME)-latest.tar.gz -C build/tgz $(MACKEREL_AGENT_NAME)
 
 release:
 	_tools/releng
@@ -110,10 +110,6 @@ release:
 commands_gen.go: commands.go
 	go get github.com/motemen/go-cli/gen
 	go generate
-
-logging/level_string.go: logging/level.go
-	go get golang.org/x/tools/cmd/stringer
-	go generate ./logging
 
 clean:
 	rm -f build/$(MACKEREL_AGENT_NAME)

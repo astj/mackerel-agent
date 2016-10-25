@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -188,7 +189,7 @@ func TestPrepareWithUpdate(t *testing.T) {
 }
 
 func TestCollectHostSpecs(t *testing.T) {
-	hostname, meta, _ /*interfaces*/, err := collectHostSpecs()
+	hostname, meta, _ /*interfaces*/, _ /*customIdentifier*/, err := collectHostSpecs()
 
 	if err != nil {
 		t.Errorf("collectHostSpecs should not fail: %s", err)
@@ -205,9 +206,12 @@ func TestCollectHostSpecs(t *testing.T) {
 
 type counterGenerator struct {
 	counter int
+	sync.Mutex
 }
 
 func (g *counterGenerator) Generate() (metrics.Values, error) {
+	g.Lock()
+	defer g.Unlock()
 	g.counter = g.counter + 1
 	return map[string]float64{"dummy.a": float64(g.counter)}, nil
 }

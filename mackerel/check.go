@@ -32,17 +32,23 @@ func (h monitorTargetHost) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// ReportCheckMonitors sends reports of checks.Checker() to Mackrel API server.
+// ReportCheckMonitors sends reports of *checks.Checker() to Mackrel API server.
 func (api *API) ReportCheckMonitors(hostID string, reports []*checks.Report) error {
 	payload := &monitoringChecksPayload{
 		Reports: make([]*checkReport, len(reports)),
 	}
+	const messageLengthLimit = 1024
 	for i, report := range reports {
+		msg := report.Message
+		runes := []rune(msg)
+		if len(runes) > messageLengthLimit {
+			msg = string(runes[0:messageLengthLimit])
+		}
 		payload.Reports[i] = &checkReport{
 			Source:               monitorTargetHost{HostID: hostID},
 			Name:                 report.Name,
 			Status:               report.Status,
-			Message:              report.Message,
+			Message:              msg,
 			OccurredAt:           Time(report.OccurredAt),
 			NotificationInterval: report.NotificationInterval,
 			MaxCheckAttempts:     report.MaxCheckAttempts,

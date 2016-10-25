@@ -62,6 +62,52 @@ fi
 /usr/local/bin/%{name}
 
 %changelog
+* Tue Oct 18 2016 <mackerel-developers@hatena.ne.jp> - 0.36.0-1
+- don't use HTTP_PROXY when requesting cloud instance metadata APIs (by Songmu)
+- Add an option to output filesystem-related metrics with key by mountpoint (by astj)
+
+* Thu Sep 29 2016 <mackerel-developers@hatena.ne.jp> - 0.35.1-1
+- support MACKEREL_PLUGIN_WORKDIR in init scripts (by Songmu)
+- Add platform metadata for Darwin (by astj)
+- Disable http2 for now (by Songmu)
+
+* Wed Sep 07 2016 <mackerel-developers@hatena.ne.jp> - 0.35.0-1
+- built with Go 1.7 (by Songmu)
+- remove `func (vs *Values) Merge(other Values)` (by Songmu)
+- [incompatible] consider df  (used + available) as size of filesystem (by Songmu)
+- Remove DigitalOcean related comment/definition from spec/cloud.go (by astj)
+- Fix golint is not working on ci, and add some comment to pass golint (by astj)
+- Add linux distribution information to kernel spec (by ak1t0)
+- http_proxy configuration (by Songmu)
+- set PATH and LANG only in unix environment (by Songmu)
+- Ignore docker mapper storage in spec as well (by itchyny)
+
+* Thu Aug 18 2016 <mackerel-developers@hatena.ne.jp> - 0.34.0-1
+- Reduce retry count on finding a host by the custom identifier (by itchyny)
+- suppress checker flooding when resuming from sleep mode (by Songmu)
+- truncate checker message up to 1024 characters (by Songmu)
+- commonalize spec.FilesystemGenerator around unix OSs (by Songmu)
+- define type DfStat,	remove dfColumnSpecs and refactor (by Songmu)
+
+* Mon Aug 08 2016 <mackerel-developers@hatena.ne.jp> - 0.33.0-1
+- Fill the customIdentifier in EC2 (by itchyny)
+
+* Thu Jul 14 2016 <mackerel-developers@hatena.ne.jp> - 0.32.2-1
+- fix GOMAXPROCS to 1 for avoiding rare panics (by Songmu)
+
+* Thu Jul 07 2016 <mackerel-developers@hatena.ne.jp> - 0.32.1-1
+- Add user for executing a plugin (by y-kuno)
+
+* Thu Jun 30 2016 <mackerel-developers@hatena.ne.jp> - 0.32.0-1
+- Added plugin check interval option (by karupanerura)
+
+* Thu Jun 23 2016 <mackerel-developers@hatena.ne.jp> - 0.31.2-1
+- Refactor around metrics/linux/memory (by Songmu)
+- Don't stop mackerel-agent process on upgrading by debian package (by karupanerura)
+- add `silent` configuration key for suppressing log output (by Songmu)
+- change log level ERROR to WARNING in spec/spec.go (by Songmu)
+- remove /usr/local/bin from sample.conf (by Songmu)
+
 * Wed May 25 2016 <mackerel-developers@hatena.ne.jp> - 0.31.0-1
 - Post the custom metrics to the hosts specified by custom identifiers (by itchyny)
 - refactor FilesystemGenerator (by Songmu)

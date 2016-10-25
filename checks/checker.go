@@ -25,6 +25,8 @@ const (
 	StatusUnknown   Status = "UNKNOWN"
 )
 
+const defaultCheckInterval = 1 * time.Minute
+
 var exitCodeToStatus = map[int]Status{
 	0: StatusOK,
 	1: StatusWarning,
@@ -39,7 +41,7 @@ type Checker struct {
 	Name string
 	// NOTE(motemen): We make use of config.PluginConfig as it happens
 	// to have the Command field which was used by metrics.pluginGenerator.
-	// If the configuration of checks.Checker and/or metrics.pluginGenerator changes,
+	// If the configuration of *checks.Checker and/or metrics.pluginGenerator changes,
 	// we should reconsider using config.PluginConfig.
 	Config config.PluginConfig
 }
@@ -54,17 +56,17 @@ type Report struct {
 	MaxCheckAttempts     *int32
 }
 
-func (c Checker) String() string {
+func (c *Checker) String() string {
 	return fmt.Sprintf("checker %q command=[%s]", c.Name, c.Config.Command)
 }
 
 // Check invokes the command and transforms its result to a Report.
-func (c Checker) Check() (*Report, error) {
+func (c *Checker) Check() *Report {
 	now := time.Now()
 
 	command := c.Config.Command
 	logger.Debugf("Checker %q executing command %q", c.Name, command)
-	message, stderr, exitCode, err := util.RunCommand(command)
+	message, stderr, exitCode, err := util.RunCommand(command, c.Config.User)
 	if stderr != "" {
 		logger.Warningf("Checker %q output stderr: %s", c.Name, stderr)
 	}
@@ -88,11 +90,19 @@ func (c Checker) Check() (*Report, error) {
 		OccurredAt:           now,
 		NotificationInterval: c.Config.NotificationInterval,
 		MaxCheckAttempts:     c.Config.MaxCheckAttempts,
-	}, nil
+	}
 }
 
 // Interval is the interval where the command is invoked.
-// (Will be configurable in the future)
-func (c Checker) Interval() time.Duration {
-	return 1 * time.Minute
+func (c *Checker) Interval() time.Duration {
+	if c.Config.CheckInterval != nil {
+		interval := time.Duration(*c.Config.CheckInterval) * time.Minute
+		if interval < 1*time.Minute {
+			interval = 1 * time.Minute
+		} else if interval > 60*time.Minute {
+			interval = 60 * time.Minute
+		}
+		return interval
+	}
+	return defaultCheckInterval
 }

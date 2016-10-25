@@ -16,7 +16,6 @@ import (
 	"github.com/mackerelio/mackerel-agent/mackerel"
 	"github.com/mackerelio/mackerel-agent/metrics"
 	"github.com/mackerelio/mackerel-agent/spec"
-	"github.com/mackerelio/mackerel-agent/util"
 )
 
 var logger = logging.GetLogger("command")
@@ -28,10 +27,6 @@ var retryInterval = 3 * time.Second
 // prepareHost collects specs of the host and sends them to Mackerel server.
 // A unique host-id is returned by the server if one is not specified.
 func prepareHost(conf *config.Config, api *mackerel.API) (*mackerel.Host, error) {
-	// XXX this configuration should be moved to under spec/linux
-	os.Setenv("PATH", "/sbin:/usr/sbin:/bin:/usr/bin:"+os.Getenv("PATH"))
-	os.Setenv("LANG", "C") // prevent changing outputs of some command, e.g. ifconfig.
-
 	doRetry := func(f func() error) {
 		retry.Retry(retryNum, retryInterval, f)
 	}
@@ -47,30 +42,50 @@ func prepareHost(conf *config.Config, api *mackerel.API) (*mackerel.Host, error)
 		return err
 	}
 
-	hostname, meta, interfaces, lastErr := collectHostSpecs()
+	hostname, meta, interfaces, customIdentifier, lastErr := collectHostSpecs()
 	if lastErr != nil {
 		return nil, fmt.Errorf("error while collecting host specs: %s", lastErr.Error())
 	}
 
 	var result *mackerel.Host
 	if hostID, err := conf.LoadHostID(); err != nil { // create
-		logger.Debugf("Registering new host on mackerel...")
 
-		doRetry(func() error {
-			hostID, lastErr = api.CreateHost(hostname, meta, interfaces, conf.Roles, conf.DisplayName)
-			return filterErrorForRetry(lastErr)
-		})
-
-		if lastErr != nil {
-			return nil, fmt.Errorf("Failed to register this host: %s", lastErr.Error())
+		if customIdentifier != "" {
+			retry.Retry(3, 2*time.Second, func() error {
+				result, lastErr = api.FindHostByCustomIdentifier(customIdentifier)
+				return filterErrorForRetry(lastErr)
+			})
+			if result != nil {
+				hostID = result.ID
+			}
 		}
 
-		doRetry(func() error {
-			result, lastErr = api.FindHost(hostID)
-			return filterErrorForRetry(lastErr)
-		})
-		if lastErr != nil {
-			return nil, fmt.Errorf("Failed to find this host on mackerel: %s", lastErr.Error())
+		if result == nil {
+			logger.Debugf("Registering new host on mackerel...")
+
+			doRetry(func() error {
+				hostID, lastErr = api.CreateHost(mackerel.HostSpec{
+					Name:             hostname,
+					Meta:             meta,
+					Interfaces:       interfaces,
+					RoleFullnames:    conf.Roles,
+					DisplayName:      conf.DisplayName,
+					CustomIdentifier: customIdentifier,
+				})
+				return filterErrorForRetry(lastErr)
+			})
+
+			if lastErr != nil {
+				return nil, fmt.Errorf("Failed to register this host: %s", lastErr.Error())
+			}
+
+			doRetry(func() error {
+				result, lastErr = api.FindHost(hostID)
+				return filterErrorForRetry(lastErr)
+			})
+			if lastErr != nil {
+				return nil, fmt.Errorf("Failed to find this host on mackerel: %s", lastErr.Error())
+			}
 		}
 	} else { // check the hostID is valid or not
 		doRetry(func() error {
@@ -183,18 +198,25 @@ func loop(c *Context, termCh chan struct{}) error {
 		c.Agent.InitPluginGenerators(c.API)
 	}
 
-	termCheckerCh := make(chan struct{})
 	termMetricsCh := make(chan struct{})
+	var termCheckerCh chan struct{}
 
+	hasChecks := len(c.Agent.Checkers) > 0
+	if hasChecks {
+		termCheckerCh = make(chan struct{})
+	}
 	// fan-out termCh
 	go func() {
 		for range termCh {
-			termCheckerCh <- struct{}{}
 			termMetricsCh <- struct{}{}
+			if termCheckerCh != nil {
+				termCheckerCh <- struct{}{}
+			}
 		}
 	}()
-
-	runCheckersLoop(c, termCheckerCh, quit)
+	if hasChecks {
+		go runCheckersLoop(c, termCheckerCh, quit)
+	}
 
 	lState := loopStateFirst
 	for {
@@ -327,7 +349,7 @@ func enqueueLoop(c *Context, postQueue chan *postValue, quit chan struct{}) {
 						continue
 					}
 				}
-				for name, value := range (map[string]float64)(values.Values) {
+				for name, value := range values.Values {
 					if math.IsNaN(value) || math.IsInf(value, 0) {
 						logger.Warningf("Invalid value: hostID = %s, name = %s, value = %f\n is not sent.", hostID, name, value)
 						continue
@@ -350,118 +372,107 @@ func enqueueLoop(c *Context, postQueue chan *postValue, quit chan struct{}) {
 	}
 }
 
+func runChecker(checker *checks.Checker, checkReportCh chan *checks.Report, reportImmediateCh chan struct{}, quit <-chan struct{}) {
+	lastStatus := checks.StatusUndefined
+	lastMessage := ""
+	interval := checker.Interval()
+	nextInterval := time.Duration(0)
+	nextTime := time.Now()
+
+	for {
+		select {
+		case <-time.After(nextInterval):
+			report := checker.Check()
+			logger.Debugf("checker %q: report=%v", checker.Name, report)
+
+			// It is possible that `now` is much bigger than `nextTime` because of
+			// laptop sleep mode or any reason.
+			now := time.Now()
+			nextInterval = interval - (now.Sub(nextTime) % interval)
+			nextTime = now.Add(nextInterval)
+
+			if report.Status == checks.StatusOK && report.Status == lastStatus && report.Message == lastMessage {
+				// Do not report if nothing has changed
+				continue
+			}
+			checkReportCh <- report
+
+			// If status has changed, send it immediately
+			// but if the status was OK and it's first invocation of a check, do not
+			if report.Status != lastStatus && !(report.Status == checks.StatusOK && lastStatus == checks.StatusUndefined) {
+				logger.Debugf("checker %q: status has changed %v -> %v: send it immediately", checker.Name, lastStatus, report.Status)
+				reportImmediateCh <- struct{}{}
+			}
+
+			lastStatus = report.Status
+			lastMessage = report.Message
+		case <-quit:
+			return
+		}
+	}
+}
+
 // runCheckersLoop generates "checker" goroutines
 // which run for each checker commands and one for HTTP POSTing
 // the reports to Mackerel API.
 func runCheckersLoop(c *Context, termCheckerCh <-chan struct{}, quit <-chan struct{}) {
-	var (
-		checkReportCh          chan *checks.Report
-		reportCheckImmediateCh chan struct{}
-	)
+	checkReportCh := make(chan *checks.Report)
+	reportImmediateCh := make(chan struct{})
+
 	for _, checker := range c.Agent.Checkers {
-		if checkReportCh == nil {
-			checkReportCh = make(chan *checks.Report)
-			reportCheckImmediateCh = make(chan struct{})
+		go runChecker(checker, checkReportCh, reportImmediateCh, quit)
+	}
+
+	exit := false
+	for !exit {
+		select {
+		case <-time.After(1 * time.Minute):
+		case <-termCheckerCh:
+			logger.Debugf("received 'term' chan")
+			exit = true
+		case <-reportImmediateCh:
+			logger.Debugf("received 'immediate' chan")
 		}
 
-		go func(checker checks.Checker) {
-			var (
-				lastStatus  = checks.StatusUndefined
-				lastMessage = ""
-			)
+		reports := []*checks.Report{}
+	DrainCheckReport:
+		for {
+			select {
+			case report := <-checkReportCh:
+				reports = append(reports, report)
+			default:
+				break DrainCheckReport
+			}
+		}
 
-			util.Periodically(
-				func() {
-					report, err := checker.Check()
-					if err != nil {
-						logger.Errorf("checker %v: %s", checker, err)
-						return
-					}
+		if len(reports) == 0 {
+			continue
+		}
 
-					logger.Debugf("checker %q: report=%v", checker.Name, report)
+		for i, report := range reports {
+			logger.Debugf("reports[%d]: %#v", i, report)
+		}
 
-					if report.Status == checks.StatusOK && report.Status == lastStatus && report.Message == lastMessage {
-						// Do not report if nothing has changed
-						return
-					}
+		err := c.API.ReportCheckMonitors(c.Host.ID, reports)
+		if err != nil {
+			logger.Errorf("ReportCheckMonitors: %s", err)
 
+			// queue back the reports
+			go func() {
+				for _, report := range reports {
+					logger.Debugf("queue back report: %#v", report)
 					checkReportCh <- report
-
-					// If status has changed, send it immediately
-					// but if the status was OK and it's first invocation of a check, do not
-					if report.Status != lastStatus && !(report.Status == checks.StatusOK && lastStatus == checks.StatusUndefined) {
-						logger.Debugf("checker %q: status has changed %v -> %v: send it immediately", checker.Name, lastStatus, report.Status)
-						reportCheckImmediateCh <- struct{}{}
-					}
-
-					lastStatus = report.Status
-					lastMessage = report.Message
-				},
-				checker.Interval(),
-				quit,
-			)
-		}(checker)
-	}
-	if checkReportCh != nil {
-		go func() {
-			exit := false
-			for !exit {
-				select {
-				case <-time.After(1 * time.Minute):
-				case <-termCheckerCh:
-					logger.Debugf("received 'term' chan")
-					exit = true
-				case <-reportCheckImmediateCh:
-					logger.Debugf("received 'immediate' chan")
 				}
-
-				reports := []*checks.Report{}
-			DrainCheckReport:
-				for {
-					select {
-					case report := <-checkReportCh:
-						reports = append(reports, report)
-					default:
-						break DrainCheckReport
-					}
-				}
-
-				for i, report := range reports {
-					logger.Debugf("reports[%d]: %#v", i, report)
-				}
-
-				if len(reports) == 0 {
-					continue
-				}
-
-				err := c.API.ReportCheckMonitors(c.Host.ID, reports)
-				if err != nil {
-					logger.Errorf("ReportCheckMonitors: %s", err)
-
-					// queue back the reports
-					go func() {
-						for _, report := range reports {
-							logger.Debugf("queue back report: %#v", report)
-							checkReportCh <- report
-						}
-					}()
-				}
-			}
-		}()
-	} else {
-		// consume termCheckerCh
-		go func() {
-			for range termCheckerCh {
-			}
-		}()
+			}()
+		}
 	}
 }
 
-// collectHostSpecs collects host specs (correspond to "name", "meta" and "interfaces" fields in API v0)
-func collectHostSpecs() (string, map[string]interface{}, []spec.NetInterface, error) {
+// collectHostSpecs collects host specs (correspond to "name", "meta", "interfaces" and "customIdentifier" fields in API v0)
+func collectHostSpecs() (string, map[string]interface{}, []spec.NetInterface, string, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to obtain hostname: %s", err.Error())
+		return "", nil, nil, "", fmt.Errorf("failed to obtain hostname: %s", err.Error())
 	}
 
 	specGens := specGenerators()
@@ -471,30 +482,39 @@ func collectHostSpecs() (string, map[string]interface{}, []spec.NetInterface, er
 	}
 	meta := spec.Collect(specGens)
 
+	var customIdentifier string
+	if cGen != nil {
+		customIdentifier, err = cGen.SuggestCustomIdentifier()
+		if err != nil {
+			logger.Warningf("Error while suggesting custom identifier. err: %s", err.Error())
+		}
+	}
+
 	interfaces, err := interfaceGenerator().Generate()
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to collect interfaces: %s", err.Error())
+		return "", nil, nil, "", fmt.Errorf("failed to collect interfaces: %s", err.Error())
 	}
-	return hostname, meta, interfaces, nil
+	return hostname, meta, interfaces, customIdentifier, nil
 }
 
 // UpdateHostSpecs updates the host information that is already registered on Mackerel.
 func (c *Context) UpdateHostSpecs() {
 	logger.Debugf("Updating host specs...")
 
-	hostname, meta, interfaces, err := collectHostSpecs()
+	hostname, meta, interfaces, customIdentifier, err := collectHostSpecs()
 	if err != nil {
 		logger.Errorf("While collecting host specs: %s", err)
 		return
 	}
 
 	err = c.API.UpdateHost(c.Host.ID, mackerel.HostSpec{
-		Name:          hostname,
-		Meta:          meta,
-		Interfaces:    interfaces,
-		RoleFullnames: c.Config.Roles,
-		Checks:        c.Config.CheckNames(),
-		DisplayName:   c.Config.DisplayName,
+		Name:             hostname,
+		Meta:             meta,
+		Interfaces:       interfaces,
+		RoleFullnames:    c.Config.Roles,
+		Checks:           c.Config.CheckNames(),
+		DisplayName:      c.Config.DisplayName,
+		CustomIdentifier: customIdentifier,
 	})
 
 	if err != nil {
@@ -546,7 +566,7 @@ func RunOnce(conf *config.Config) error {
 }
 
 func runOncePayload(conf *config.Config) ([]mackerel.CreateGraphDefsPayload, *mackerel.HostSpec, *agent.MetricsResult, error) {
-	hostname, meta, interfaces, err := collectHostSpecs()
+	hostname, meta, interfaces, customIdentifier, err := collectHostSpecs()
 	if err != nil {
 		logger.Errorf("While collecting host specs: %s", err)
 		return nil, nil, nil, err
@@ -561,12 +581,13 @@ func runOncePayload(conf *config.Config) ([]mackerel.CreateGraphDefsPayload, *ma
 	graphdefs := ag.CollectGraphDefsOfPlugins()
 	metrics := ag.CollectMetrics(time.Now())
 	return graphdefs, &mackerel.HostSpec{
-		Name:          hostname,
-		Meta:          meta,
-		Interfaces:    interfaces,
-		RoleFullnames: conf.Roles,
-		Checks:        conf.CheckNames(),
-		DisplayName:   conf.DisplayName,
+		Name:             hostname,
+		Meta:             meta,
+		Interfaces:       interfaces,
+		RoleFullnames:    conf.Roles,
+		Checks:           conf.CheckNames(),
+		DisplayName:      conf.DisplayName,
+		CustomIdentifier: customIdentifier,
 	}, metrics, nil
 }
 
@@ -594,11 +615,11 @@ func Run(c *Context, termCh chan struct{}) error {
 	return err
 }
 
-func createCheckers(conf *config.Config) []checks.Checker {
-	checkers := []checks.Checker{}
+func createCheckers(conf *config.Config) []*checks.Checker {
+	checkers := []*checks.Checker{}
 
 	for name, pluginConfig := range conf.Plugin["checks"] {
-		checker := checks.Checker{
+		checker := &checks.Checker{
 			Name:   name,
 			Config: pluginConfig,
 		}

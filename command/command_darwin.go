@@ -13,7 +13,7 @@ func specGenerators() []spec.Generator {
 		&specDarwin.KernelGenerator{},
 		&specDarwin.MemoryGenerator{},
 		&specDarwin.CPUGenerator{},
-		&specDarwin.FilesystemGenerator{},
+		&spec.FilesystemGenerator{},
 	}
 }
 
@@ -27,7 +27,7 @@ func metricsGenerators(conf *config.Config) []metrics.Generator {
 		&metricsDarwin.CPUUsageGenerator{},
 		&metricsDarwin.MemoryGenerator{},
 		&metricsDarwin.SwapGenerator{},
-		&metrics.FilesystemGenerator{IgnoreRegexp: conf.Filesystems.Ignore.Regexp},
+		&metrics.FilesystemGenerator{IgnoreRegexp: conf.Filesystems.Ignore.Regexp, UseMountpoint: conf.Filesystems.UseMountpoint},
 		&metricsDarwin.InterfaceGenerator{Interval: metricsInterval},
 	}
 
