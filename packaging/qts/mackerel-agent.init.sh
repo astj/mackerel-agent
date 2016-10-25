@@ -16,6 +16,7 @@ SCRIPTNAME=$ETC/init.d/$NAME.sh
 LOGFILE=${LOGILE:="/var/log/$NAME.log"}
 PIDFILE=${PIDFILE:="/var/run/$NAME.pid"}
 ROOT=${ROOT:="/var/lib/$NAME"}
+MACKEREL_PLUGIN_WORKDIR=${MACKEREL_PLUGIN_WORKDIR:="/var/tmp/$NAME"}
 
 # Exit if the package is not installed
 [ -x $DAEMON ] || exit 0
@@ -25,7 +26,8 @@ ROOT=${ROOT:="/var/lib/$NAME"}
 #
 do_start()
 {
-    $DAEMON ${APIBASE:+--apibase=$APIBASE} ${APIKEY:+--apikey=$APIKEY} --pidfile=$PIDFILE --root=$ROOT $OTHER_OPTS >>$LOGFILE 2>&1 &
+    mkdir -m 777 -p $MACKEREL_PLUGIN_WORKDIR
+    MACKREL_PLUGIN_WORKDIR=$MACKEREL_PLUGIN_WORKDIR $DAEMON ${APIBASE:+--apibase=$APIBASE} ${APIKEY:+--apikey=$APIKEY} --pidfile=$PIDFILE --root=$ROOT $OTHER_OPTS >>$LOGFILE 2>&1 &
     sleep 3
     kill -0 $(cat $PIDFILE 2>/dev/null) >/dev/null 2>&1
     return $?
