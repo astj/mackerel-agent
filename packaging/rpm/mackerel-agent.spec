@@ -62,6 +62,48 @@ fi
 /usr/local/bin/%{name}
 
 %changelog
+* Wed Feb 08 2017 <mackerel-developers@hatena.ne.jp> - 0.39.4-1
+- prepare windows eventlog (by daiksy)
+- Refactor plugin configurations (by itchyny)
+- Execute less `go build`s on deploy (by astj)
+- treat xmlns (by mattn)
+- Fix xmlns (by mattn)
+
+* Wed Jan 25 2017 <mackerel-developers@hatena.ne.jp> - 0.39.3-1
+- Fix segfault when loading a bad config file (by hanazuki)
+- fix windows eventlog level when "verbose=true" (by daiksy)
+
+* Mon Jan 16 2017 <mackerel-developers@hatena.ne.jp> - 0.39.2-1
+- Test wix/pluginlist.txt on AppVeyor ci (by astj)
+- Revert "remove windows plugins on pluginslist" (by daiksy)
+
+* Thu Jan 12 2017 <mackerel-developers@hatena.ne.jp> - 0.39.1-1
+- support filesystems.Ignore on windows (by Songmu)
+- remove windows plugins on pluginslist (by daiksy)
+
+* Wed Jan 11 2017 <mackerel-developers@hatena.ne.jp> - 0.39.0-1
+- implement `pluginGenerators` for windows (by daiksy)
+- add check-windows-eventlog on pluginlist (by daiksy)
+- Remove duplicated generator in Windows (by astj)
+- add mackerel-plugin-windows-server-sessions on pluginlist (by daiksy)
+
+* Wed Dec 21 2016 <mackerel-developers@hatena.ne.jp> - 0.38.0-1
+- fix typo (by ts-3156)
+- Add Copyright (by yuuki)
+- Separate interfaceGenerator from specGenerators (by motemen)
+- Timout http reuquest in 30 sec (requries go 1.3) (by hakobe)
+- specify command arguments in mackerel-agent.conf (by Songmu)
+- several improvements for Windows (by daiksy)
+- Avoid time.Tick and use time.NewTicker instead (by haya14busa)
+
+* Tue Nov 29 2016 <mackerel-developers@hatena.ne.jp> - 0.37.1-1
+- fix pluginlist (by daiksy)
+- Suppress ec2 metadata warnings (by itchyny)
+- Uncapitalize error messages (by itchyny)
+
+* Thu Oct 27 2016 <mackerel-developers@hatena.ne.jp> - 0.37.0-1
+- improve Windows support (by daiksy)
+
 * Tue Oct 18 2016 <mackerel-developers@hatena.ne.jp> - 0.36.0-1
 - don't use HTTP_PROXY when requesting cloud instance metadata APIs (by Songmu)
 - Add an option to output filesystem-related metrics with key by mountpoint (by astj)

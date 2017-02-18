@@ -3,7 +3,6 @@
 package command
 
 import (
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -24,16 +23,14 @@ func TestRunOnce(t *testing.T) {
 	}
 
 	conf := &config.Config{
-		Plugin: map[string]config.PluginConfigs{
-			"metrics": map[string]config.PluginConfig{
-				"metric1": {
-					Command: diceCommand,
-				},
+		MetricPlugins: map[string]*config.MetricPlugin{
+			"metric1": {
+				Command: diceCommand,
 			},
-			"checks": map[string]config.PluginConfig{
-				"check1": {
-					Command: "echo 1",
-				},
+		},
+		CheckPlugins: map[string]*config.CheckPlugin{
+			"check1": {
+				Command: "echo 1",
 			},
 		},
 	}
@@ -44,10 +41,6 @@ func TestRunOnce(t *testing.T) {
 }
 
 func TestRunOncePayload(t *testing.T) {
-	if os.Getenv("TRAVIS") != "" {
-		t.Skip("Skip in travis")
-	}
-
 	if testing.Short() {
 		origMetricsInterval := metricsInterval
 		metricsInterval = 1
@@ -57,16 +50,14 @@ func TestRunOncePayload(t *testing.T) {
 	}
 
 	conf := &config.Config{
-		Plugin: map[string]config.PluginConfigs{
-			"metrics": map[string]config.PluginConfig{
-				"metric1": {
-					Command: diceCommand,
-				},
+		MetricPlugins: map[string]*config.MetricPlugin{
+			"metric1": {
+				Command: diceCommand,
 			},
-			"checks": map[string]config.PluginConfig{
-				"check1": {
-					Command: "echo 1",
-				},
+		},
+		CheckPlugins: map[string]*config.CheckPlugin{
+			"check1": {
+				Command: "echo 1",
 			},
 		},
 	}

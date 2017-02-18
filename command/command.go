@@ -76,7 +76,7 @@ func prepareHost(conf *config.Config, api *mackerel.API) (*mackerel.Host, error)
 			})
 
 			if lastErr != nil {
-				return nil, fmt.Errorf("Failed to register this host: %s", lastErr.Error())
+				return nil, fmt.Errorf("failed to register this host: %s", lastErr.Error())
 			}
 
 			doRetry(func() error {
@@ -84,7 +84,7 @@ func prepareHost(conf *config.Config, api *mackerel.API) (*mackerel.Host, error)
 				return filterErrorForRetry(lastErr)
 			})
 			if lastErr != nil {
-				return nil, fmt.Errorf("Failed to find this host on mackerel: %s", lastErr.Error())
+				return nil, fmt.Errorf("failed to find this host on mackerel: %s", lastErr.Error())
 			}
 		}
 	} else { // check the hostID is valid or not
@@ -94,9 +94,9 @@ func prepareHost(conf *config.Config, api *mackerel.API) (*mackerel.Host, error)
 		})
 		if lastErr != nil {
 			if fsStorage, ok := conf.HostIDStorage.(*config.FileSystemHostIDStorage); ok {
-				return nil, fmt.Errorf("Failed to find this host on mackerel (You may want to delete file \"%s\" to register this host to an another organization): %s", fsStorage.HostIDFile(), lastErr.Error())
+				return nil, fmt.Errorf("failed to find this host on mackerel (You may want to delete file \"%s\" to register this host to an another organization): %s", fsStorage.HostIDFile(), lastErr.Error())
 			}
-			return nil, fmt.Errorf("Failed to find this host on mackerel: %s", lastErr.Error())
+			return nil, fmt.Errorf("failed to find this host on mackerel: %s", lastErr.Error())
 		}
 	}
 
@@ -107,13 +107,13 @@ func prepareHost(conf *config.Config, api *mackerel.API) (*mackerel.Host, error)
 			return filterErrorForRetry(lastErr)
 		})
 		if lastErr != nil {
-			return nil, fmt.Errorf("Failed to set default host status: %s, %s", hostSt, lastErr.Error())
+			return nil, fmt.Errorf("failed to set default host status: %s, %s", hostSt, lastErr.Error())
 		}
 	}
 
 	lastErr = conf.SaveHostID(result.ID)
 	if lastErr != nil {
-		return nil, fmt.Errorf("Failed to save host ID: %s", lastErr.Error())
+		return nil, fmt.Errorf("failed to save host ID: %s", lastErr.Error())
 	}
 
 	return result, nil
@@ -123,15 +123,7 @@ func prepareHost(conf *config.Config, api *mackerel.API) (*mackerel.Host, error)
 // configuration of the custom_identifier fields.
 func prepareCustomIdentiferHosts(conf *config.Config, api *mackerel.API) map[string]*mackerel.Host {
 	customIdentifierHosts := make(map[string]*mackerel.Host)
-	customIdentifiers := make(map[string]bool) // use a map to make them unique
-	for _, pluginConfigs := range conf.Plugin {
-		for _, pluginConfig := range pluginConfigs {
-			if pluginConfig.CustomIdentifier != nil {
-				customIdentifiers[*pluginConfig.CustomIdentifier] = true
-			}
-		}
-	}
-	for customIdentifier := range customIdentifiers {
+	for _, customIdentifier := range conf.ListCustomIdentifiers() {
 		host, err := api.FindHostByCustomIdentifier(customIdentifier)
 		if err != nil {
 			logger.Warningf("Failed to retrieve the host of custom_identifier: %s, %s", customIdentifier, err)
@@ -332,7 +324,7 @@ func updateHostSpecsLoop(c *Context, quit chan struct{}) {
 }
 
 func enqueueLoop(c *Context, postQueue chan *postValue, quit chan struct{}) {
-	metricsResult := c.Agent.Watch()
+	metricsResult := c.Agent.Watch(quit)
 	for {
 		select {
 		case <-quit:
@@ -529,12 +521,12 @@ func (c *Context) UpdateHostSpecs() {
 func Prepare(conf *config.Config) (*Context, error) {
 	api, err := mackerel.NewAPI(conf.Apibase, conf.Apikey, conf.Verbose)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to prepare an api: %s", err.Error())
+		return nil, fmt.Errorf("failed to prepare an api: %s", err.Error())
 	}
 
 	host, err := prepareHost(conf, api)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to prepare host: %s", err.Error())
+		return nil, fmt.Errorf("failed to prepare host: %s", err.Error())
 	}
 
 	return &Context{
@@ -558,7 +550,7 @@ func RunOnce(conf *config.Config) error {
 		"metrics": metrics,
 	})
 	if err != nil {
-		logger.Warningf("Error while marshaling graphdefs: err = %s, graphdefs = %s.", err.Error(), graphdefs)
+		logger.Warningf("Error while marshaling graphdefs: err = %s, graphdefs = %v.", err.Error(), graphdefs)
 		return err
 	}
 	fmt.Println(string(json))
@@ -618,7 +610,7 @@ func Run(c *Context, termCh chan struct{}) error {
 func createCheckers(conf *config.Config) []*checks.Checker {
 	checkers := []*checks.Checker{}
 
-	for name, pluginConfig := range conf.Plugin["checks"] {
+	for name, pluginConfig := range conf.CheckPlugins {
 		checker := &checks.Checker{
 			Name:   name,
 			Config: pluginConfig,
@@ -636,5 +628,15 @@ func prepareGenerators(conf *config.Config) []metrics.Generator {
 	if diagnostic {
 		generators = append(generators, &metrics.AgentGenerator{})
 	}
+	return generators
+}
+
+func pluginGenerators(conf *config.Config) []metrics.PluginGenerator {
+	generators := []metrics.PluginGenerator{}
+
+	for _, pluginConfig := range conf.MetricPlugins {
+		generators = append(generators, metrics.NewPluginGenerator(pluginConfig))
+	}
+
 	return generators
 }

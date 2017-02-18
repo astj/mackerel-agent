@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.39.4 (2017-02-08)
+
+* prepare windows eventlog #319 (daiksy)
+* Refactor plugin configurations #322 (itchyny)
+* Execute less `go build`s on deploy #323 (astj)
+* treat xmlns #324 (mattn)
+* Fix xmlns #326 (mattn)
+
+
+## 0.39.3 (2017-01-25)
+
+* Fix segfault when loading a bad config file #316 (hanazuki)
+* fix windows eventlog level when "verbose=true" #318 (daiksy)
+
+
+## 0.39.2 (2017-01-16)
+
+* Test wix/pluginlist.txt on AppVeyor ci #313 (astj)
+* Revert "remove windows plugins on pluginslist" #314 (daiksy)
+
+
+## 0.39.1 (2017-01-12)
+
+* support filesystems.Ignore on windows #303 (Songmu)
+* remove windows plugins on pluginslist #309 (daiksy)
+
+
+## 0.39.0 (2017-01-11)
+
+* implement `pluginGenerators` for windows #301 (daiksy)
+* add check-windows-eventlog on pluginlist #302 (daiksy)
+* Remove duplicated generator in Windows #305 (astj)
+* add mackerel-plugin-windows-server-sessions on pluginlist #306 (daiksy)
+
+
+## 0.38.0 (2016-12-21)
+
+* fix typo #12 (ts-3156)
+* Add Copyright #13 (yuuki)
+* Separate interfaceGenerator from specGenerators #14 (motemen)
+* Timout http reuquest in 30 sec (requries go 1.3) #17 (hakobe)
+* specify command arguments in mackerel-agent.conf #293 (Songmu)
+* several improvements for Windows #298 (daiksy)
+* Avoid time.Tick and use time.NewTicker instead #299 (haya14busa)
+
+
+## 0.37.1 (2016-11-29)
+
+* fix pluginlist #291 (daiksy)
+* Suppress ec2 metadata warnings #294 (itchyny)
+* Uncapitalize error messages #295 (itchyny)
+
+
+## 0.37.0 (2016-10-27)
+
+* improve Windows support #289 (daiksy)
+
+
 ## 0.36.0 (2016-10-18)
 
 * don't use HTTP_PROXY when requesting cloud instance metadata APIs #285 (Songmu)
