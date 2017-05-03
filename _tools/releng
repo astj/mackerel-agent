@@ -52,6 +52,7 @@ sub DEBUG() { $ENV{MC_RELENG_DEBUG} || $verbose }
 
 sub command {say('+ '. join ' ', @_) if DEBUG; !system(@_) or croak $!}
 sub command_with_exit_code {say('+ '. join ' ', @_) if DEBUG; system(@_)}
+sub command_without_stderr {say('+ '. join ' ', @_) if DEBUG; !system(join(' ', @_) . ' >/dev/null 2>&1') or croak $!}
 sub _git {
     if($dry_run){
         return
@@ -76,6 +77,12 @@ sub git_with_exit_code {
     unshift  @_, _git; goto \&command_with_exit_code
 }
 
+sub git_without_stderr {
+    if($dry_run){
+        return
+    }
+    unshift  @_, _git; goto \&command_without_stderr
+}
 
 sub _hub {
     if($dry_run){
@@ -186,7 +193,7 @@ sub spew {
 sub replace {
     my ($file, $code) = @_;
     if(!-f $file){ errorf "File does not exist: %s\n", $file; }
-    my $content = $code->(slurp($file));
+    my $content = $code->(slurp($file), $file);
     spew($file, $content);
 }
 
@@ -313,57 +320,69 @@ sub update_changelog {
     my $now = localtime;
     my $ret = 0;
 
-    replace 'packaging/deb/debian/changelog' => sub {
-        my $content = shift;
+    my $generate_deb_changelog_replacer = sub {
+        my ($debian_version) = @_;
+        return sub {
+            my ($content, $filename) = @_;
 
-        my $update = "$package_name ($next_version-1) stable; urgency=low\n\n";
-        for my $rel (@releases) {
-            $update .= sprintf "  * %s (by %s)\n    <%s>\n", $rel->{title}, $rel->{user}, $rel->{url};
-        }
-        $update .= sprintf "\n -- %s <%s>  %s\n\n", $name, $email, $now->strftime("%a, %d %b %Y %H:%M:%S %z");
+            my $update = "$package_name ($next_version-$debian_version) stable; urgency=low\n\n";
+            for my $rel (@releases) {
+                $update .= sprintf "  * %s (by %s)\n    <%s>\n", $rel->{title}, $rel->{user}, $rel->{url};
+            }
+            $update .= sprintf "\n -- %s <%s>  %s\n\n", $name, $email, $now->strftime("%a, %d %b %Y %H:%M:%S %z");
 
-        # '35' means a rough length to cut timestamp at the end of update.
-        if(index($content, substr($update, 0, length($update) - 35)) == -1){
-            infof "update 'packaging/deb/debian/changelog'.\n";
-            $ret = 1;
-            $update . $content;
-        } else {
-            infof "skip to update 'packaging/deb/debian/changelog'.\n";
-            $content;
-        }
+            # '35' means a rough length to cut timestamp at the end of update.
+            if(index($content, substr($update, 0, length($update) - 35)) == -1){
+                infof "update '$filename'.\n";
+                $ret = 1;
+                $update . $content;
+            } else {
+                infof "skip to update '$filename'.\n";
+                $content;
+            }
+        };
     };
 
-    my $spec = sprintf "packaging/rpm/%s.spec", $package_name;
-    replace $spec => sub {
-        my $content = shift;
+    replace 'packaging/deb/debian/changelog' => $generate_deb_changelog_replacer->('1');
+
+    replace 'packaging/deb-systemd/debian/changelog' => $generate_deb_changelog_replacer->('1.systemd');
+
+    my $rpm_changelog_replacer = sub {
+        my ($content, $filename) = @_;
 
         my $update = sprintf "* %s <%s> - %s-1\n", $now->strftime('%a %b %d %Y'), $email, $next_version;
         for my $rel (@releases) {
             $update .= sprintf "- %s (by %s)\n", $rel->{title}, $rel->{user};
         }
-        if(index($content, $update) == -1){
-            infof "update '%s'\n", $spec;
+        if (index($content, $update) == -1) {
+            infof "update '%s'\n", $filename;
             $ret = 1;
             $content =~ s/%changelog/%changelog\n$update/;
         } else {
-            infof "skip to update '%s'\n", $spec;
+            infof "skip to update '%s'\n", $filename;
         }
         $content;
     };
 
+    my $rpm_spec = sprintf "packaging/rpm/%s.spec", $package_name;
+    replace $rpm_spec => $rpm_changelog_replacer;
+
+    my $rpm_systemd_spec = sprintf "packaging/rpm/%s-systemd.spec", $package_name;
+    replace $rpm_systemd_spec => $rpm_changelog_replacer;
+
     replace 'CHANGELOG.md' => sub {
-        my $content = shift;
+        my ($content, $filename) = @_;
 
         my $update = sprintf "\n\n## %s (%s)\n\n", $next_version, $now->strftime('%Y-%m-%d');
         for my $rel (@releases) {
             $update .= sprintf "* %s #%d (%s)\n", $rel->{title}, $rel->{num}, $rel->{user};
         }
         if(index($content, $update) == -1){
-            infof "update 'CHANGELOG.md'\n";
+            infof "update '$filename'\n";
             $ret = 1;
             $content =~ s/\A# Changelog/# Changelog$update/;
         } else {
-            infof "skip to update 'CHANGELOG.md'\n";
+            infof "skip to update '$filename'\n";
         }
         $content;
     };
@@ -413,7 +432,7 @@ sub upload_to_github_release {
     # upload files
     my $latest_release_pullrequest = find_latest_release_pullrequest();
     my $description = $latest_release_pullrequest->{body};
-    my @filepaths = glob("~/rpmbuild/RPMS/*/*.rpm packaging/*.deb snapshot/*.zip snapshot/*.tar.gz build/*.tar.gz");
+    my @filepaths = glob("~/rpmbuild/RPMS/*/*.rpm rpmbuild/RPMS/*/*.rpm packaging/*.deb snapshot/*.zip snapshot/*.tar.gz build/*.tar.gz");
     infof "uploading following files:\n" . join("\n", @filepaths). "\n";
     for my $path (@filepaths){
         my $filename = basename($path);
@@ -463,7 +482,7 @@ sub create_pull_request {
         git qw/config user.email/, 'mackerel-developers@hatena.ne.jp';
         git qw/config user.name/, 'mackerel';
         git qw/commit -am/, "update changelogs";
-        git qw/push -u/, "https://$ENV{GITHUB_TOKEN}\@github.com/$REPO_NAME.git";
+        git_without_stderr qw/push -u/, "https://$ENV{GITHUB_TOKEN}\@github.com/$REPO_NAME.git";
         infof "Difference is pushed to GitHub.\n";
     }
 
@@ -479,7 +498,7 @@ sub create_pull_request {
         infof "Releasing pull request is created. Review and merge it. You can update changelogs and commit more in this branch before merging.\n";
     } else {
         # do push and pull-request again
-        git qw/push -u/, "https://$ENV{GITHUB_TOKEN}\@github.com/$REPO_NAME.git";
+        git_without_stderr qw/push -u/, "https://$ENV{GITHUB_TOKEN}\@github.com/$REPO_NAME.git";
         $ret = hub_with_exit_code qw/pull-request -m/, $pr_body, qq/-b/, qq/$REPO_NAME:master/;
         if(!defined($ret) || $ret == 0){
             infof "Releasing pull request is created. Review and merge it. You can update changelogs and commit more in this branch before merging.\n";
@@ -541,6 +560,10 @@ sub main {
     } elsif($task && $task eq "upload-to-github-release"){
         infof "Upload files to GitHub Release.\n";
         upload_to_github_release();
+        return;
+    } elsif($task && $task eq "update-changelog"){
+        infof "Updating changelog.\n";
+        update_changelog(next_version);
         return;
     } elsif($task && $task eq "upload-master-to-github-release"){
         infof "Upload files on master branch to GitHub Release.\n";
