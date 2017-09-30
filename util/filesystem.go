@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/Songmu/timeout"
-	"github.com/mackerelio/mackerel-agent/logging"
+	"github.com/mackerelio/golib/logging"
 )
 
 // DfStat is disk free statistics from df command.
@@ -50,7 +50,7 @@ func init() {
 	case "darwin":
 		dfOpt = []string{"-Pkl"}
 	case "freebsd":
-		dfOpt = []string{"-Pkt", "noprocfs,devfs,fdescfs,nfs,cd9660"}
+		dfOpt = []string{"-Pkt", "noprocfs,devfs,fdescfs,nfs,nullfs,cd9660"}
 	case "netbsd":
 		dfOpt = []string{"-Pkl"}
 	default:

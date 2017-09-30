@@ -62,6 +62,28 @@ fi
 /usr/local/bin/%{name}
 
 %changelog
+* Wed Sep 27 2017 <mackerel-developers@hatena.ne.jp> - 0.45.0
+- build with Go 1.9 (by astj)
+
+* Wed Aug 30 2017 <mackerel-developers@hatena.ne.jp> - 0.44.2
+- Change the log level for failure of posting metric values (by itchyny)
+- Show CPU/SoC model name on Linux/MIPS (by hnw)
+
+* Wed Aug 23 2017 <mackerel-developers@hatena.ne.jp> - 0.44.1
+- Fail to start when custom identifiers are mismatched (by mechairoi)
+- Fix the Azure VM check (by stefafafan)
+- Adjust the Azure Virtual Machine metadata keys (by stefafafan)
+
+* Wed Jul 26 2017 <mackerel-developers@hatena.ne.jp> - 0.44.0
+- Adjust isEC2 check  (by stefafafan)
+- Support Azure VM Metadata (by stefafafan)
+- FreeBSD: don't collect nullfs disk stat (by kyontan)
+- Improve the EC2 Instance check (by stefafafan)
+
+* Wed Jun 14 2017 <mackerel-developers@hatena.ne.jp> - 0.43.2
+- Revert "Enable HTTP/2" (by Songmu)
+- [refactoring] remove version package and adjust internal dependencies (by Songmu)
+
 * Wed May 17 2017 <mackerel-developers@hatena.ne.jp> - 0.43.1-1
 - rename command.Context to command.App (by Songmu)
 - Add `prevent_alert_auto_close` option for check plugins (by mechairoi)

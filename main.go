@@ -11,11 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mackerelio/golib/logging"
 	"github.com/mackerelio/mackerel-agent/command"
 	"github.com/mackerelio/mackerel-agent/config"
-	"github.com/mackerelio/mackerel-agent/logging"
 	"github.com/mackerelio/mackerel-agent/pidfile"
-	"github.com/mackerelio/mackerel-agent/version"
 	"github.com/motemen/go-cli"
 )
 
@@ -43,6 +42,14 @@ func main() {
 	if os.Getenv("GOMAXPROCS") == "" {
 		runtime.GOMAXPROCS(1)
 	}
+	// force disabling http2, because the http/2 connection sometimes unstable
+	// at a certain data center equipped with particular network switches.
+	godebug := os.Getenv("GODEBUG")
+	if godebug != "" {
+		godebug += ","
+	}
+	godebug += "http2client=0"
+	os.Setenv("GODEBUG", godebug)
 	cli.Run(os.Args[1:])
 }
 
@@ -161,14 +168,17 @@ func setLogLevel(silent, verbose bool) {
 
 func start(conf *config.Config, termCh chan struct{}) error {
 	setLogLevel(conf.Silent, conf.Verbose)
-	logger.Infof("Starting mackerel-agent version:%s, rev:%s, apibase:%s", version.VERSION, version.GITCOMMIT, conf.Apibase)
+	logger.Infof("Starting mackerel-agent version:%s, rev:%s, apibase:%s", version, gitcommit, conf.Apibase)
 
 	if err := pidfile.Create(conf.Pidfile); err != nil {
 		return fmt.Errorf("pidfile.Create(%q) failed: %s", conf.Pidfile, err)
 	}
 	defer pidfile.Remove(conf.Pidfile)
 
-	app, err := command.Prepare(conf)
+	app, err := command.Prepare(conf, &command.AgentMeta{
+		Version:  version,
+		Revision: gitcommit,
+	})
 	if err != nil {
 		return fmt.Errorf("command.Prepare failed: %s", err)
 	}

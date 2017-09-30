@@ -1,3 +1,52 @@
+mackerel-agent (0.45.0-1) stable; urgency=low
+
+  * build with Go 1.9 (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/414>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 27 Sep 2017 12:06:52 +0900
+
+mackerel-agent (0.44.2-1) stable; urgency=low
+
+  * Change the log level for failure of posting metric values (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/409>
+  * Show CPU/SoC model name on Linux/MIPS (by hnw)
+    <https://github.com/mackerelio/mackerel-agent/pull/408>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 30 Aug 2017 15:17:58 +0900
+
+mackerel-agent (0.44.1-1) stable; urgency=low
+
+  * Fail to start when custom identifiers are mismatched (by mechairoi)
+    <https://github.com/mackerelio/mackerel-agent/pull/405>
+  * Fix the Azure VM check (by stefafafan)
+    <https://github.com/mackerelio/mackerel-agent/pull/404>
+  * Adjust the Azure Virtual Machine metadata keys (by stefafafan)
+    <https://github.com/mackerelio/mackerel-agent/pull/403>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 23 Aug 2017 12:23:27 +0900
+
+mackerel-agent (0.44.0-1) stable; urgency=low
+
+  * Adjust isEC2 check  (by stefafafan)
+    <https://github.com/mackerelio/mackerel-agent/pull/401>
+  * Support Azure VM Metadata (by stefafafan)
+    <https://github.com/mackerelio/mackerel-agent/pull/399>
+  * FreeBSD: don't collect nullfs disk stat (by kyontan)
+    <https://github.com/mackerelio/mackerel-agent/pull/400>
+  * Improve the EC2 Instance check (by stefafafan)
+    <https://github.com/mackerelio/mackerel-agent/pull/398>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 26 Jul 2017 12:43:23 +0900
+
+mackerel-agent (0.43.2-1) stable; urgency=low
+
+  * Revert "Enable HTTP/2" (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/393>
+  * [refactoring] remove version package and adjust internal dependencies (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/391>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 14 Jun 2017 10:32:43 +0900
+
 mackerel-agent (0.43.1-1) stable; urgency=low
 
   * rename command.Context to command.App (by Songmu)

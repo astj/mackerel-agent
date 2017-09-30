@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.45.0 (2017-09-27)
+
+* build with Go 1.9 #414 (astj)
+
+
+## 0.44.2 (2017-08-30)
+
+* Change the log level for failure of posting metric values #409 (itchyny)
+* Show CPU/SoC model name on Linux/MIPS #408 (hnw)
+
+
+## 0.44.1 (2017-08-23)
+
+* Fail to start when custom identifiers are mismatched #405 (mechairoi)
+* Fix the Azure VM check #404 (stefafafan)
+* Adjust the Azure Virtual Machine metadata keys #403 (stefafafan)
+
+
+## 0.44.0 (2017-07-26)
+
+* Adjust isEC2 check  #401 (stefafafan)
+* Support Azure VM Metadata #399 (stefafafan)
+* FreeBSD: don't collect nullfs disk stat #400 (kyontan)
+* Improve the EC2 Instance check #398 (stefafafan)
+
+
+## 0.43.2 (2017-06-14)
+
+* Revert "Enable HTTP/2" #393 (Songmu)
+* [refactoring] remove version package and adjust internal dependencies #391 (Songmu)
+
+
 ## 0.43.1 (2017-05-17)
 
 * rename command.Context to command.App #384 (Songmu)
