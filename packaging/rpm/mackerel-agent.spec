@@ -62,6 +62,22 @@ fi
 /usr/local/bin/%{name}
 
 %changelog
+* Thu Oct 26 2017 <mackerel-developers@hatena.ne.jp> - 0.47.1
+- Use go-osstat library on linux (by itchyny)
+
+* Thu Oct 19 2017 <mackerel-developers@hatena.ne.jp> - 0.47.0
+- Trigger action command after check plugin running. (by mechairoi)
+- Ensure returned value of retrieveAzureVMMetadata is not null (by astj)
+- Use go-osstat library on darwin (by itchyny)
+- Subtract cpu.guest from cpu.user on Linux (by itchyny)
+- Improve kernel spec generator performance for Linux (by itchyny)
+- Improve implementation for memory spec on Linux (by itchyny)
+- Do not send too many reports in one API request. (by astj)
+
+* Wed Oct 04 2017 <mackerel-developers@hatena.ne.jp> - 0.46.0
+- Use new API BaseURL (by astj)
+- Filter plugin metrics value by include_pattern and exclude_pattern option (by astj)
+
 * Wed Sep 27 2017 <mackerel-developers@hatena.ne.jp> - 0.45.0
 - build with Go 1.9 (by astj)
 
