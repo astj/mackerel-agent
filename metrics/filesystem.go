@@ -27,13 +27,17 @@ func (g *FilesystemGenerator) Generate() (Values, error) {
 		if g.IgnoreRegexp != nil && g.IgnoreRegexp.MatchString(name) {
 			continue
 		}
+		var metricName string
 		if device := strings.TrimPrefix(name, "/dev/"); name != device {
-			var metricName string
 			if g.UseMountpoint {
 				metricName = util.SanitizeMetricKey(dfs.Mounted)
 			} else {
 				metricName = util.SanitizeMetricKey(device)
 			}
+		} else if name == "/" {
+			metricName = "root"
+		}
+		if metricName != "" {
 			// kilo bytes -> bytes
 			ret["filesystem."+metricName+".size"] = float64(dfs.Used+dfs.Available) * 1024
 			ret["filesystem."+metricName+".used"] = float64(dfs.Used) * 1024
