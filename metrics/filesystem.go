@@ -34,7 +34,7 @@ func (g *FilesystemGenerator) Generate() (Values, error) {
 			} else {
 				metricName = util.SanitizeMetricKey(device)
 			}
-		} else if name == "/" {
+		} else if dfs.Mounted == "/" {
 			metricName = "root"
 		}
 		if metricName != "" {
