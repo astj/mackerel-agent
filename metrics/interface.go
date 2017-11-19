@@ -1,14 +1,12 @@
-// +build linux
+// +build !windows
 
-package linux
+package metrics
 
 import (
-	"regexp"
 	"time"
 
 	"github.com/mackerelio/go-osstat/network"
 	"github.com/mackerelio/golib/logging"
-	"github.com/mackerelio/mackerel-agent/metrics"
 	"github.com/mackerelio/mackerel-agent/util"
 )
 
@@ -17,7 +15,7 @@ collect network interface I/O
 
 `interface.{interface}.{metric}.delta`: The increased amount of network I/O per minute retrieved from /proc/net/dev
 
-interface = "eth0", "eth1" and so on...
+interface = "eth0", "eth1" and so on... ("en0" on darwin)
 */
 
 // InterfaceGenerator generates interface metric values
@@ -25,20 +23,10 @@ type InterfaceGenerator struct {
 	Interval time.Duration
 }
 
-var interfaceMetrics = []string{
-	"rxBytes", "rxPackets", "rxErrors", "rxDrops",
-	"rxFifo", "rxFrame", "rxCompressed", "rxMulticast",
-	"txBytes", "txPackets", "txErrors", "txDrops",
-	"txFifo", "txColls", "txCarrier", "txCompressed",
-}
-
-// metrics for posting to Mackerel
-var postInterfaceMetricsRegexp = regexp.MustCompile(`^interface\..+\.(?:rxBytes|txBytes)$`)
-
 var interfaceLogger = logging.GetLogger("metrics.interface")
 
 // Generate interface metric values
-func (g *InterfaceGenerator) Generate() (metrics.Values, error) {
+func (g *InterfaceGenerator) Generate() (Values, error) {
 	prevValues, err := g.collectInterfacesValues()
 	if err != nil {
 		return nil, err
@@ -58,7 +46,7 @@ func (g *InterfaceGenerator) Generate() (metrics.Values, error) {
 		}
 	}
 
-	return metrics.Values(ret), nil
+	return Values(ret), nil
 }
 
 func (g *InterfaceGenerator) collectInterfacesValues() (map[string]uint64, error) {
