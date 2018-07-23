@@ -20,6 +20,7 @@ LOGFILE=${LOGILE:="/var/log/$NAME.log"}
 PIDFILE=${PIDFILE:="/var/run/$NAME.pid"}
 ROOT=${ROOT:="/var/lib/$NAME"}
 MACKEREL_PLUGIN_WORKDIR=${MACKEREL_PLUGIN_WORKDIR:="/var/tmp/$NAME"}
+RETIRESLEEP=${RETIRESLEEP:=30}
 
 if [ "$HTTP_PROXY" != "" ]; then
     export HTTP_PROXY=$HTTP_PROXY
@@ -54,6 +55,7 @@ do_configtest()
 
 do_retire()
 {
+    sleep $RETIRESLEEP
     $DAEMON retire -force ${APIBASE:+--apibase=$APIBASE} ${APIKEY:+--apikey=$APIKEY} --root=$ROOT $OTHER_OPTS >>$LOGFILE 2>&1
 }
 
