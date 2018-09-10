@@ -11,7 +11,7 @@ import (
 	"github.com/mackerelio/mackerel-agent/mackerel"
 )
 
-var diceCommand = "../example/metrics-plugins/dice-with-meta.rb"
+var diceCommand = "go run ../_example/metrics-plugins/dice-with-meta.go"
 
 func TestRunOnce(t *testing.T) {
 	if testing.Short() {
@@ -89,7 +89,7 @@ func TestRunOncePayload(t *testing.T) {
 	if hostSpec.Name == "" {
 		t.Errorf("hostname should be set")
 	}
-	if hostSpec.Checks[0] != "check1" {
+	if hostSpec.Checks[0].Name != "check1" {
 		t.Errorf("first check name should be check1")
 	}
 

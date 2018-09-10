@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -71,6 +70,8 @@ func (g *pluginGenerator) CustomIdentifier() *string {
 	return g.Config.CustomIdentifier
 }
 
+var pluginMetaHeadlineReg = regexp.MustCompile(`^#\s*mackerel-agent-plugin\b(.*)`)
+
 // loadPluginMeta obtains plugin information (e.g. graph visuals, metric
 // namespaces, etc) from the command specified.
 // mackerel-agent runs the command with MACKEREL_AGENT_PLUGIN_META
@@ -121,10 +122,8 @@ func (g *pluginGenerator) CustomIdentifier() *string {
 // 	}
 func (g *pluginGenerator) loadPluginMeta() error {
 	// Set environment variable to make the plugin command generate its configuration
-	os.Setenv(pluginConfigurationEnvName, "1")
-	defer os.Setenv(pluginConfigurationEnvName, "")
-
-	stdout, stderr, exitCode, err := g.Config.Command.Run()
+	pluginMetaEnv := pluginConfigurationEnvName + "=1"
+	stdout, stderr, exitCode, err := g.Config.Command.RunWithEnv([]string{pluginMetaEnv})
 	if err != nil {
 		return fmt.Errorf("running %s failed: %s, exit=%d stderr=%q", g.Config.Command.CommandString(), err, exitCode, stderr)
 	}
@@ -141,8 +140,7 @@ func (g *pluginGenerator) loadPluginMeta() error {
 	// # mackerel-agent-plugin [key=value]...
 	pluginMetaHeader := map[string]string{}
 
-	re := regexp.MustCompile(`^#\s*mackerel-agent-plugin\b(.*)`)
-	m := re.FindStringSubmatch(headerLine)
+	m := pluginMetaHeadlineReg.FindStringSubmatch(headerLine)
 	if m == nil {
 		return fmt.Errorf("bad format of first line: %q", headerLine)
 	}
@@ -181,13 +179,17 @@ func (g *pluginGenerator) loadPluginMeta() error {
 }
 
 func (g *pluginGenerator) makeCreateGraphDefsPayload() []mackerel.CreateGraphDefsPayload {
-	if g.Meta == nil {
+	return makeCreateGraphDefsPayload(g.Meta)
+}
+
+func makeCreateGraphDefsPayload(meta *pluginMeta) []mackerel.CreateGraphDefsPayload {
+	if meta == nil {
 		return nil
 	}
 
 	payloads := []mackerel.CreateGraphDefsPayload{}
 
-	for key, graph := range g.Meta.Graphs {
+	for key, graph := range meta.Graphs {
 		payload := mackerel.CreateGraphDefsPayload{
 			Name:        pluginPrefix + key,
 			DisplayName: graph.Label,
@@ -212,11 +214,9 @@ func (g *pluginGenerator) makeCreateGraphDefsPayload() []mackerel.CreateGraphDef
 	return payloads
 }
 
-var delimReg = regexp.MustCompile(`[\s\t]+`)
-
 func (g *pluginGenerator) collectValues() (Values, error) {
-	os.Setenv(pluginConfigurationEnvName, "")
-	stdout, stderr, _, err := g.Config.Command.Run()
+	pluginMetaEnv := pluginConfigurationEnvName + "="
+	stdout, stderr, _, err := g.Config.Command.RunWithEnv([]string{pluginMetaEnv})
 
 	if stderr != "" {
 		pluginLogger.Infof("command %s outputted to STDERR: %q", g.Config.Command.CommandString(), stderr)
@@ -230,8 +230,8 @@ func (g *pluginGenerator) collectValues() (Values, error) {
 	for _, line := range strings.Split(stdout, "\n") {
 		// Key, value, timestamp
 		// ex.) tcp.CLOSING 0 1397031808
-		items := delimReg.Split(line, 3)
-		if len(items) != 3 {
+		items := strings.Fields(line)
+		if len(items) < 3 {
 			continue
 		}
 

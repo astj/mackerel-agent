@@ -94,6 +94,29 @@ func parseDfLines(out string) []*DfStat {
 		if strings.HasPrefix(dfstat.Name, "/dev/mapper/docker-") {
 			continue
 		}
+		// https://debbugs.gnu.org/cgi/bugreport.cgi?bug=10363
+		// http://git.savannah.gnu.org/gitweb/?p=coreutils.git;a=commit;h=1e18d8416f9ef43bf08982cabe54220587061a08
+		// coreutils >= 8.15
+		if strings.HasPrefix(dfstat.Name, "/dev/dm-") && strings.Contains(dfstat.Mounted, "devicemapper/mnt") {
+			continue
+		}
+
+		if runtime.GOOS == "darwin" {
+			if strings.HasPrefix(dfstat.Mounted, "/Volumes/") {
+				continue
+			}
+			// Skip APFS vm partition, add its usage to the root filesystem.
+			if dfstat.Mounted == "/private/var/vm" {
+				for _, fs := range filesystems {
+					if fs.Mounted == "/" {
+						fs.Used += dfstat.Used
+						break
+					}
+				}
+				continue
+			}
+		}
+
 		filesystems = append(filesystems, dfstat)
 	}
 	return filesystems

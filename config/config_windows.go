@@ -2,23 +2,21 @@ package config
 
 import (
 	"log"
+	"os"
 	"path/filepath"
-
-	"github.com/mackerelio/mackerel-agent/util/windows"
 )
 
 func init() {
-	path, err := windows.ExecPath()
+	path, err := os.Executable()
 	if err != nil {
 		log.Fatal(err)
 	}
 	execDir := filepath.Dir(path)
 	agentName := getAgentName()
 	DefaultConfig = &Config{
-		Apibase:    getApibase(),
-		Root:       execDir,
-		Pidfile:    filepath.Join(execDir, agentName+".pid"),
-		Conffile:   filepath.Join(execDir, agentName+".conf"),
-		Connection: defaultConnectionConfig,
+		Apibase:  getApibase(),
+		Root:     execDir,
+		Pidfile:  filepath.Join(execDir, agentName+".pid"),
+		Conffile: filepath.Join(execDir, agentName+".conf"),
 	}
 }

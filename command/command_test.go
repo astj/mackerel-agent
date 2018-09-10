@@ -13,6 +13,7 @@ import (
 
 	"github.com/mackerelio/golib/logging"
 	"github.com/mackerelio/mackerel-agent/agent"
+	"github.com/mackerelio/mackerel-agent/checks"
 	"github.com/mackerelio/mackerel-agent/config"
 	"github.com/mackerelio/mackerel-agent/mackerel"
 	"github.com/mackerelio/mackerel-agent/metrics"
@@ -78,9 +79,8 @@ func newMockAPIServer(t *testing.T) (config.Config, map[string]func(*http.Reques
 	}
 
 	conf := config.Config{
-		Apibase:    ts.URL,
-		Root:       root,
-		Connection: config.DefaultConfig.Connection,
+		Apibase: ts.URL,
+		Root:    root,
 	}
 
 	return conf, mockHandlers, ts
@@ -189,18 +189,31 @@ func TestPrepareWithUpdate(t *testing.T) {
 }
 
 func TestCollectHostSpecs(t *testing.T) {
-	hostname, meta, _ /*interfaces*/, _ /*customIdentifier*/, err := collectHostSpecs()
+	conf := config.Config{}
+	hostSpec, err := collectHostSpecs(&conf, &AgentMeta{})
 
 	if err != nil {
 		t.Errorf("collectHostSpecs should not fail: %s", err)
 	}
 
-	if hostname == "" {
+	if hostSpec.Name == "" {
 		t.Error("hostname should not be empty")
 	}
 
-	if _, ok := meta["cpu"]; !ok {
+	if len(hostSpec.Meta.CPU) == 0 {
 		t.Error("meta.cpu should exist")
+	}
+
+	if len(hostSpec.Meta.Memory) == 0 {
+		t.Error("meta.memory should exist")
+	}
+
+	if len(hostSpec.Meta.Filesystem) == 0 {
+		t.Error("meta.filesystem should exist")
+	}
+
+	if len(hostSpec.Meta.Kernel) == 0 {
+		t.Error("meta.kernel should exist")
 	}
 }
 
@@ -237,10 +250,10 @@ func TestLoop(t *testing.T) {
 		config.PostMetricsInterval = 10 * time.Second
 		ratio := config.PostMetricsInterval.Seconds() / originalPostMetricsInterval.Seconds()
 
-		conf.Connection.PostMetricsDequeueDelaySeconds =
-			int(float64(config.DefaultConfig.Connection.PostMetricsRetryDelaySeconds) * ratio)
-		conf.Connection.PostMetricsRetryDelaySeconds =
-			int(float64(config.DefaultConfig.Connection.PostMetricsRetryDelaySeconds) * ratio)
+		postMetricsDequeueDelaySeconds =
+			int(float64(postMetricsDequeueDelaySeconds) * ratio)
+		postMetricsRetryDelaySeconds =
+			int(float64(postMetricsRetryDelaySeconds) * ratio)
 
 		defer func() {
 			config.PostMetricsInterval = originalPostMetricsInterval
@@ -346,5 +359,76 @@ func TestLoop(t *testing.T) {
 	exitErr := <-exitCh
 	if exitErr != nil {
 		t.Errorf("exitErr should be nil, got: %s", exitErr)
+	}
+}
+
+func TestReportCheckMonitors(t *testing.T) {
+	if testing.Verbose() {
+		logging.SetLogLevel(logging.DEBUG)
+	}
+
+	cases := []struct {
+		Status      int
+		expectRetry bool
+	}{
+		{http.StatusOK, false},
+		{http.StatusBadRequest, false},
+		{http.StatusInternalServerError, true},
+	}
+
+	for _, tc := range cases {
+		conf, mockHandlers, ts := newMockAPIServer(t)
+		defer ts.Close()
+
+		if testing.Short() {
+			reportCheckRetryDelaySeconds = 1
+		}
+
+		postCount := 0
+		retried := false
+		mu := &sync.Mutex{}
+
+		mockHandlers["POST /api/v0/monitoring/checks/report"] = func(req *http.Request) (int, jsonObject) {
+			mu.Lock()
+			defer mu.Unlock()
+			postCount++
+			if postCount > 1 {
+				retried = true
+			}
+			return tc.Status, jsonObject{}
+		}
+
+		api, err := mackerel.NewAPI(conf.Apibase, conf.Apikey, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		host := &mackerel.Host{ID: "xyzabc12345"}
+
+		app := &App{
+			Agent:     &agent.Agent{},
+			Config:    &conf,
+			API:       api,
+			Host:      host,
+			AgentMeta: &AgentMeta{},
+		}
+
+		go func() {
+			reportCheckMonitors(app, []*checks.Report{})
+		}()
+
+		time.Sleep(time.Duration(reportCheckRetryDelaySeconds) * 3 * time.Second)
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		if retried != tc.expectRetry {
+			text := http.StatusText(tc.Status)
+			if tc.expectRetry {
+				t.Errorf("the agent should have resend reports when got %d %q", tc.Status, text)
+			} else {
+				t.Errorf("the agent should not have resend reports when got %d %q", tc.Status, text)
+			}
+		}
 	}
 }

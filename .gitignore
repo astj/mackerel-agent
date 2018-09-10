@@ -1,4 +1,5 @@
 .*
+!.circleci
 !.gitignore
 !.goxc.json
 !.travis.yml
@@ -18,5 +19,3 @@ packaging/deb-build
 packaging/rpm-build
 
 /mackerel-agent.conf
-
-commands_gen.go

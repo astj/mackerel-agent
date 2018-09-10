@@ -1,5 +1,123 @@
 # Changelog
 
+## 0.56.1 (2018-08-30)
+
+* Do HTTP retry on determining cloud platform and suggesting customIdentifier #516 (astj)
+* [windows] Add timeout to WMI query for disk metrics #511 (astj)
+
+
+## 0.56.0 (2018-07-25)
+
+* Fix starting order of Windows Service #506 (mattn)
+* Auto retire with shutdown on Windows #505 (mattn)
+* Use RunWithEnv instead of os.Setenv to avoid environment variable races #507 (itchyny)
+* Improve debug messages for check monitoring actions #510 (itchyny)
+* add mssql-plugin in windows msi #509 (daiksy)
+* Replace GCE metadata endpoint with absolute FQDN #508 (i2tsuki)
+
+
+## 0.55.0 (2018-06-20)
+
+* improve PATH handling #501 (astj)
+* Build with Go 1.10 #500 (astj)
+
+
+## 0.54.1 (2018-03-28)
+
+* Support UUID in little-endian format on EC2 detection #496 (hayajo)
+* change the message level from WARNING to INFO when customIdentifier is not registered #493 (hayajo)
+
+
+## 0.54.0 (2018-03-20)
+
+* fix isEC2 #494 (Songmu)
+* care `MemAvailable` in collecting metrics around memory on linux #491 (Songmu)
+
+
+## 0.53.0 (2018-03-15)
+
+* Stop collecting memory.available for now #490 (Songmu)
+* omit `/Volumes/` from collected `df` values on darwin #489 (Songmu)
+* Enhance diagnostic mode #486 (Songmu)
+* Fix EC2 check for KVM based EC2 instance (e.g. c5 instance) #488 (hayajo)
+
+
+## 0.52.1 (2018-03-01)
+
+* context support in cmdutil #485 (Songmu)
+* Improve error handling when executing commands #484 (Songmu)
+* extend timeout for retrieving cloud metadata #483 (hayajo)
+
+
+## 0.52.0 (2018-02-08)
+
+* Refine metrics collector #442 (mechairoi)
+*  Add `memo` option to check plugin config #480 (mechairoi)
+
+
+## 0.51.0 (2018-01-23)
+
+* Fix metric values of pagefile total and pagefile free on Windows #456 (itchyny)
+* update rpm-v2 task for building Amazon Linux 2 package #475 (hayajo)
+* Care plugins that handle timeout signal(SIGTERM) #476 (Songmu)
+
+
+## 0.50.1 (2018-01-15)
+
+* Add mkr to dependencies to include it into windows msi #478 (shibayu36)
+
+
+## 0.50.0 (2018-01-15)
+
+* use supervisor mode in sysvinit script for crash recovery #472 (Songmu)
+* include mkr into windows msi #465 (Songmu)
+* pass returned value from command.RunOnce so that `mackerel-agent once… #474 (astj)
+
+
+## 0.49.0 (2018-01-10)
+
+* cut out `cmdutil` package from `util` and interface adjustment #470 (Songmu)
+* Ignore connection configurations in mackerel-agent.conf #463 (itchyny)
+* fix error check in TestStart of start_test.go #471 (Ken2mer)
+* [fix] `action` command in `checks` is able to have an individual timeout settings #469 (Songmu)
+* Add an option of timeout duration for executing command #460 (taku-k)
+* Adjust appveyor.yml #466 (Songmu)
+* introduce goxz #468 (Songmu)
+* using os.Executable() for getting executable path on windows environment #464 (Songmu)
+* include commands_gen.go in repo for go-gettability #467 (Songmu)
+* Ignore veth in network I/O metrics on Linux. (Docker creats a lot) #462 (hayajo)
+* Ignore device-mapper in disk I/O metrics on Linux. (Docker creats a lot) #461 (hayajo)
+* Ignore devicemapper #459 (hayajo)
+* Ignore empty hostid file #458 (astj)
+* add check-uptime.exe on msi #455 (Songmu)
+* fix the retry of check reports #453 (hayajo)
+
+
+## 0.48.2 (2017-12-20)
+
+* Fix network interface spec collector on Windows #452 (itchyny)
+
+
+## 0.48.1 (2017-12-13)
+
+* fix a bug when action of check-plugin was not specified #450 (hayajo)
+
+
+## 0.48.0 (2017-12-12)
+
+* Set environment variables for plugins #448 (hayajo)
+* Add an option to declare cloud platform explicitly #447 (astj)
+
+
+## 0.47.3 (2017-11-28)
+
+* Fix interface metrics of large counter values on Linux #445 (itchyny)
+* Refine license notice #444 (itchyny)
+* Improve plugin command parsing error message #443 (itchyny)
+* Log stderr and err of check action #432 (mechairoi)
+* Commonize interface generators for Linux, Darwin and add support for BSD systems #441 (itchyny)
+
+
 ## 0.47.2 (2017-11-09)
 
 * Use go 1.9.2 #437 (astj)

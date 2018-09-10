@@ -8,15 +8,12 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/mackerelio/mackerel-client-go"
+
+	"github.com/mackerelio/mackerel-agent/config"
 )
-
-func TestCloudKey(t *testing.T) {
-	g := &CloudGenerator{}
-
-	if g.Key() != "cloud" {
-		t.Error("key should be cloud")
-	}
-}
 
 func TestCloudGenerate(t *testing.T) {
 	handler := func(res http.ResponseWriter, req *http.Request) {
@@ -38,19 +35,14 @@ func TestCloudGenerate(t *testing.T) {
 		t.Errorf("should not raise error: %s", err)
 	}
 
-	cloud, typeOk := value.(map[string]interface{})
+	cloud, typeOk := value.(*mackerel.Cloud)
 	if !typeOk {
-		t.Errorf("value should be map. %+v", value)
+		t.Errorf("value should be *mackerel.Cloud. %+v", value)
 	}
 
-	value, ok := cloud["metadata"]
-	if !ok {
-		t.Error("results should have metadata.")
-	}
-
-	metadata, typeOk := value.(map[string]string)
+	metadata, typeOk := cloud.MetaData.(map[string]string)
 	if !typeOk {
-		t.Errorf("v should be map. %+v", value)
+		t.Errorf("MetaData should be map. %+v", cloud.MetaData)
 	}
 
 	if len(metadata["instance-id"]) == 0 {
@@ -67,8 +59,72 @@ func TestCloudGenerate(t *testing.T) {
 	}
 }
 
+func TestEC2SuggestCustomIdentifier(t *testing.T) {
+	i := 0
+	threshold := 100
+	handler := func(res http.ResponseWriter, req *http.Request) {
+		if i < threshold {
+			http.Error(res, "not found", 404)
+		} else {
+			fmt.Fprint(res, "i-4f90d537")
+		}
+		i++
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		handler(res, req)
+	}))
+	defer ts.Close()
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Errorf("should not raise error: %s", err)
+	}
+	g := &CloudGenerator{&EC2Generator{u}}
+
+	// 404, 404, 404 => give up
+	{
+		_, err := g.SuggestCustomIdentifier()
+		if err == nil {
+			t.Errorf("should raise error: %s", err)
+		}
+	}
+	i = 0
+	threshold = 0
+	// 200 => ok
+	{
+		customIdentifier, err := g.SuggestCustomIdentifier()
+		if err != nil {
+			t.Errorf("should not raise error: %s", err)
+		}
+		if customIdentifier != "i-4f90d537.ec2.amazonaws.com" {
+			t.Error("customIdentifier mismatch")
+		}
+	}
+	i = 0
+	threshold = 1
+	// 404, 200 => ok
+	{
+		customIdentifier, err := g.SuggestCustomIdentifier()
+		if err != nil {
+			t.Errorf("should not raise error: %s", err)
+		}
+		if customIdentifier != "i-4f90d537.ec2.amazonaws.com" {
+			t.Error("customIdentifier mismatch")
+		}
+	}
+	i = 0
+	threshold = 3
+	// 404, 404, 404(give up), 200, ...
+	{
+		_, err := g.SuggestCustomIdentifier()
+		if err == nil {
+			t.Errorf("should raise error: %s", err)
+		}
+	}
+}
+
 func TestGCEGenerate(t *testing.T) {
-	// curl "http://metadata.google.internal/computeMetadata/v1/?recursive=true" -H "Metadata-Flavor: Google"
+	// curl "http://metadata.google.internal./computeMetadata/v1/?recursive=true" -H "Metadata-Flavor: Google"
 	sampleJSON := []byte(`{
 	  "instance": {
 		"attributes": {},
@@ -175,11 +231,15 @@ func TestGCEGenerate(t *testing.T) {
 }
 
 func TestSuggestCloudGenerator(t *testing.T) {
-	// both of ec2BaseURL and gceMetaURL are unreachable
+	// All Cloud meta URLs are unreachable
 	unreachableURL, _ := url.Parse("http://unreachable.localhost")
 	ec2BaseURL = unreachableURL
 	gceMetaURL = unreachableURL
-	cGen := SuggestCloudGenerator()
+	azureVMBaseURL = unreachableURL
+
+	conf := config.Config{}
+
+	cGen := SuggestCloudGenerator(&conf)
 	if cGen != nil {
 		t.Errorf("cGen should be nil but, %s", cGen)
 	}
@@ -189,8 +249,9 @@ func TestSuggestCloudGenerator(t *testing.T) {
 		defer ts.Close()
 		u, _ := url.Parse(ts.URL)
 		ec2BaseURL = u
+		defer func() { ec2BaseURL = unreachableURL }()
 
-		cGen = SuggestCloudGenerator()
+		cGen = SuggestCloudGenerator(&conf)
 		if cGen != nil {
 			t.Errorf("cGen should be nil but, %s", cGen)
 		}
@@ -201,11 +262,11 @@ func TestSuggestCloudGenerator(t *testing.T) {
 			fmt.Fprint(res, "GCE:OK")
 		}))
 		defer ts.Close()
-		ec2BaseURL = unreachableURL
 		u, _ := url.Parse(ts.URL)
 		gceMetaURL = u
+		defer func() { gceMetaURL = unreachableURL }()
 
-		cGen = SuggestCloudGenerator()
+		cGen = SuggestCloudGenerator(&conf)
 		if cGen == nil {
 			t.Errorf("cGen should not be nil.")
 		}
@@ -218,4 +279,131 @@ func TestSuggestCloudGenerator(t *testing.T) {
 			t.Errorf("something went wrong")
 		}
 	}()
+
+	func() { // suggest AzureVMGenerator
+		ts := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			if req.Header.Get("Metadata") != "true" {
+				http.NotFound(res, req)
+			}
+			fmt.Fprint(res, "ok")
+		}))
+		defer ts.Close()
+		u, _ := url.Parse(ts.URL)
+		azureVMBaseURL = u
+		defer func() { azureVMBaseURL = unreachableURL }()
+
+		cGen = SuggestCloudGenerator(&conf)
+		if cGen == nil {
+			t.Errorf("cGen should not be nil.")
+		}
+
+		gen, ok := cGen.CloudMetaGenerator.(*AzureVMGenerator)
+		if !ok {
+			t.Errorf("cGen should be *AzureVMGenerator")
+		}
+		if gen.baseURL != azureVMBaseURL {
+			t.Errorf("something went wrong")
+		}
+	}()
+
+	func() { // multiple generators are available, but suggest the first responded one (in this case EC2)
+		// azure. ok immediately
+		tsA := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			fmt.Fprint(res, "ok")
+		}))
+		defer tsA.Close()
+		uA, _ := url.Parse(tsA.URL)
+		azureVMBaseURL = uA
+		// ec2 / gce. ok after 1 second
+		ts := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+			time.Sleep(2 * time.Second)
+			fmt.Fprint(res, "ok")
+		}))
+		defer ts.Close()
+		u, _ := url.Parse(ts.URL)
+		ec2BaseURL = u
+		gceMetaURL = u
+		defer func() {
+			ec2BaseURL = unreachableURL
+			gceMetaURL = unreachableURL
+			azureVMBaseURL = unreachableURL
+		}()
+
+		cGen = SuggestCloudGenerator(&conf)
+		if cGen == nil {
+			t.Errorf("cGen should not be nil.")
+		}
+
+		_, ok := cGen.CloudMetaGenerator.(*AzureVMGenerator)
+		if !ok {
+			t.Errorf("cGen should be *AzureVMGenerator")
+		}
+	}()
+}
+
+func TestSuggestCloudGenerator_CloudPlatformSpecified(t *testing.T) {
+	// All Cloud meta URLs are unreachable
+	unreachableURL, _ := url.Parse("http://unreachable.localhost")
+	ec2BaseURL = unreachableURL
+	gceMetaURL = unreachableURL
+	azureVMBaseURL = unreachableURL
+
+	{
+		conf := config.Config{
+			CloudPlatform: config.CloudPlatformNone,
+		}
+
+		cGen := SuggestCloudGenerator(&conf)
+		if cGen != nil {
+			t.Errorf("cGen should be nil.")
+		}
+	}
+
+	{
+		conf := config.Config{
+			CloudPlatform: config.CloudPlatformEC2,
+		}
+
+		cGen := SuggestCloudGenerator(&conf)
+		if cGen == nil {
+			t.Errorf("cGen should not be nil.")
+		}
+
+		_, ok := cGen.CloudMetaGenerator.(*EC2Generator)
+		if !ok {
+			t.Errorf("cGen should be *EC2Generator")
+		}
+	}
+
+	{
+		conf := config.Config{
+			CloudPlatform: config.CloudPlatformGCE,
+		}
+
+		cGen := SuggestCloudGenerator(&conf)
+		if cGen == nil {
+			t.Errorf("cGen should not be nil.")
+		}
+
+		_, ok := cGen.CloudMetaGenerator.(*GCEGenerator)
+		if !ok {
+			t.Errorf("cGen should be *GCEGenerator")
+		}
+	}
+
+	{
+		conf := config.Config{
+			CloudPlatform: config.CloudPlatformAzureVM,
+		}
+
+		cGen := SuggestCloudGenerator(&conf)
+		if cGen == nil {
+			t.Errorf("cGen should not be nil.")
+		}
+
+		_, ok := cGen.CloudMetaGenerator.(*AzureVMGenerator)
+		if !ok {
+			t.Errorf("cGen should be *AzureVMGenerator")
+		}
+	}
 }

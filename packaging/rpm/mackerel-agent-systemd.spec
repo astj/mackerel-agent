@@ -55,6 +55,92 @@ systemctl enable %{name}.service
 %config(noreplace) %{_sysconfdir}/%{name}/%{name}.conf
 
 %changelog
+* Thu Aug 30 2018 <mackerel-developers@hatena.ne.jp> - 0.56.1
+- Do HTTP retry on determining cloud platform and suggesting customIdentifier (by astj)
+- [windows] Add timeout to WMI query for disk metrics (by astj)
+
+* Wed Jul 25 2018 <mackerel-developers@hatena.ne.jp> - 0.56.0
+- Fix starting order of Windows Service (by mattn)
+- Auto retire with shutdown on Windows (by mattn)
+- Use RunWithEnv instead of os.Setenv to avoid environment variable races (by itchyny)
+- Improve debug messages for check monitoring actions (by itchyny)
+- add mssql-plugin in windows msi (by daiksy)
+- Replace GCE metadata endpoint with absolute FQDN (by i2tsuki)
+
+* Wed Jun 20 2018 <mackerel-developers@hatena.ne.jp> - 0.55.0
+- improve PATH handling (by astj)
+- Build with Go 1.10 (by astj)
+
+* Wed Mar 28 2018 <mackerel-developers@hatena.ne.jp> - 0.54.1
+- Support UUID in little-endian format on EC2 detection (by hayajo)
+- change the message level from WARNING to INFO when customIdentifier is not registered (by hayajo)
+
+* Tue Mar 20 2018 <mackerel-developers@hatena.ne.jp> - 0.54.0
+- fix isEC2 (by Songmu)
+- care `MemAvailable` in collecting metrics around memory on linux (by Songmu)
+
+* Thu Mar 15 2018 <mackerel-developers@hatena.ne.jp> - 0.53.0
+- Stop collecting memory.available for now (by Songmu)
+- omit `/Volumes/` from collected `df` values on darwin (by Songmu)
+- Enhance diagnostic mode (by Songmu)
+- Fix EC2 check for KVM based EC2 instance (e.g. c5 instance) (by hayajo)
+
+* Thu Mar 01 2018 <mackerel-developers@hatena.ne.jp> - 0.52.1
+- context support in cmdutil (by Songmu)
+- Improve error handling when executing commands (by Songmu)
+- extend timeout for retrieving cloud metadata (by hayajo)
+
+* Thu Feb 08 2018 <mackerel-developers@hatena.ne.jp> - 0.52.0
+- Refine metrics collector (by mechairoi)
+-  Add `memo` option to check plugin config (by mechairoi)
+
+* Tue Jan 23 2018 <mackerel-developers@hatena.ne.jp> - 0.51.0
+- Fix metric values of pagefile total and pagefile free on Windows (by itchyny)
+- update rpm-v2 task for building Amazon Linux 2 package (by hayajo)
+- Care plugins that handle timeout signal(SIGTERM) (by Songmu)
+
+* Mon Jan 15 2018 <mackerel-developers@hatena.ne.jp> - 0.50.1
+- Add mkr to dependencies to include it into windows msi (by shibayu36)
+
+* Mon Jan 15 2018 <mackerel-developers@hatena.ne.jp> - 0.50.0
+- use supervisor mode in sysvinit script for crash recovery (by Songmu)
+- include mkr into windows msi (by Songmu)
+- pass returned value from command.RunOnce so that `mackerel-agent once… (by astj)
+
+* Wed Jan 10 2018 <mackerel-developers@hatena.ne.jp> - 0.49.0
+- cut out `cmdutil` package from `util` and interface adjustment (by Songmu)
+- Ignore connection configurations in mackerel-agent.conf (by itchyny)
+- fix error check in TestStart of start_test.go (by Ken2mer)
+- [fix] `action` command in `checks` is able to have an individual timeout settings (by Songmu)
+- Add an option of timeout duration for executing command (by taku-k)
+- Adjust appveyor.yml (by Songmu)
+- introduce goxz (by Songmu)
+- using os.Executable() for getting executable path on windows environment (by Songmu)
+- include commands_gen.go in repo for go-gettability (by Songmu)
+- Ignore veth in network I/O metrics on Linux. (Docker creats a lot) (by hayajo)
+- Ignore device-mapper in disk I/O metrics on Linux. (Docker creats a lot) (by hayajo)
+- Ignore devicemapper (by hayajo)
+- Ignore empty hostid file (by astj)
+- add check-uptime.exe on msi (by Songmu)
+- fix the retry of check reports (by hayajo)
+
+* Wed Dec 20 2017 <mackerel-developers@hatena.ne.jp> - 0.48.2
+- Fix network interface spec collector on Windows (by itchyny)
+
+* Wed Dec 13 2017 <mackerel-developers@hatena.ne.jp> - 0.48.1
+- fix a bug when action of check-plugin was not specified (by hayajo)
+
+* Tue Dec 12 2017 <mackerel-developers@hatena.ne.jp> - 0.48.0
+- Set environment variables for plugins (by hayajo)
+- Add an option to declare cloud platform explicitly (by astj)
+
+* Tue Nov 28 2017 <mackerel-developers@hatena.ne.jp> - 0.47.3
+- Fix interface metrics of large counter values on Linux (by itchyny)
+- Refine license notice (by itchyny)
+- Improve plugin command parsing error message (by itchyny)
+- Log stderr and err of check action (by mechairoi)
+- Commonize interface generators for Linux, Darwin and add support for BSD systems (by itchyny)
+
 * Thu Nov 09 2017 <mackerel-developers@hatena.ne.jp> - 0.47.2
 - Use go 1.9.2 (by astj)
 - Commonize loadavg5 generators for Linux, Darwin and BSD systems (by itchyny)
