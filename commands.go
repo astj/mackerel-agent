@@ -122,7 +122,7 @@ func doRetire(fs *flag.FlagSet, argv []string) error {
 
 	hostID, err := conf.LoadHostID()
 	if err != nil {
-		return fmt.Errorf("hostID file is not found")
+		return fmt.Errorf("hostID file is not found or empty")
 	}
 
 	api, err := command.NewMackerelClient(conf.Apibase, conf.Apikey, version, gitcommit, conf.Verbose)
@@ -162,9 +162,8 @@ func doOnce(fs *flag.FlagSet, argv []string) error {
 		logger.Warningf("failed to load config (but `once` must not required conf): %s", err)
 		conf = &config.Config{}
 	}
-	command.RunOnce(conf, &command.AgentMeta{
+	return command.RunOnce(conf, &command.AgentMeta{
 		Version:  version,
 		Revision: gitcommit,
 	})
-	return nil
 }

@@ -1,6 +1,6 @@
 MACKEREL_AGENT_NAME ?= "mackerel-agent"
 MACKEREL_API_BASE ?= "https://api.mackerelio.com"
-VERSION = 0.47.2
+VERSION = 0.56.1
 CURRENT_REVISION = $(shell git rev-parse --short HEAD)
 ARGS = "-conf=mackerel-agent.conf"
 BUILD_OS_TARGETS = "linux darwin freebsd windows netbsd"
@@ -23,21 +23,32 @@ build: deps
 run: build
 	./build/$(MACKEREL_AGENT_NAME) $(ARGS)
 
-deps: generate
+deps:
 	go get -d -v -t ./...
 	go get github.com/golang/lint/golint
 	go get github.com/pierrre/gotestcover
-	go get github.com/laher/goxc
+	go get github.com/Songmu/goxz/cmd/goxz
 	go get github.com/mattn/goveralls
+	go get github.com/motemen/go-cli/gen
 
 lint: deps
 	go tool vet -all -printfuncs=Criticalf,Infof,Warningf,Debugf,Tracef .
 	_tools/go-linter $(BUILD_OS_TARGETS)
 
+convention:
+	go generate ./... && git diff --exit-code || \
+	  (echo 'please `go generate ./...` and commit them' && false)
+
 crossbuild: deps
 	cp mackerel-agent.sample.conf mackerel-agent.conf
-	goxc -build-ldflags=$(BUILD_LDFLAGS) \
-		-os="linux darwin freebsd netbsd" -arch="386 amd64 arm" -d . -n $(MACKEREL_AGENT_NAME)
+	goxz -build-ldflags=$(BUILD_LDFLAGS) \
+		-os=linux,darwin,freebsd,netbsd -arch=386,amd64 -d ./snapshot \
+		-include=mackerel-agent.conf \
+		-n $(MACKEREL_AGENT_NAME) -o $(MACKEREL_AGENT_NAME)
+	goxz -build-ldflags=$(BUILD_LDFLAGS) \
+		-os=linux,freebsd,netbsd -arch=arm -d ./snapshot \
+		-include=mackerel-agent.conf \
+		-n $(MACKEREL_AGENT_NAME) -o $(MACKEREL_AGENT_NAME)
 
 cover: deps
 	gotestcover -v -race -short -covermode=atomic -coverprofile=.profile.cov -parallelpackages=4 ./...
@@ -73,6 +84,11 @@ rpm-v2: crossbuild-package
 	docker run --rm -v "$(PWD)":/workspace -v "$(PWD)/rpmbuild":/rpmbuild astj/mackerel-rpm-builder:c7 \
 	--define "_sourcedir /workspace/packaging/rpm-build/src" --define "_builddir /workspace/build-linux-amd64" \
 	--define "_version ${VERSION}" --define "buildarch x86_64" \
+	-bb packaging/rpm-build/$(MACKEREL_AGENT_NAME).spec
+	BUILD_SYSTEMD=1 MACKEREL_AGENT_NAME=$(MACKEREL_AGENT_NAME) _tools/packaging/prepare-rpm-build.sh
+	docker run --rm -v "$(PWD)":/workspace -v "$(PWD)/rpmbuild":/rpmbuild astj/mackerel-rpm-builder:c7 \
+	--define "_sourcedir /workspace/packaging/rpm-build/src" --define "_builddir /workspace/build-linux-amd64" \
+	--define "_version ${VERSION}" --define "buildarch x86_64" --define "dist .amzn2" \
 	-bb packaging/rpm-build/$(MACKEREL_AGENT_NAME).spec
 
 deb: deb-v1 deb-v2
@@ -163,15 +179,8 @@ release: check-release-deps
 	(cd _tools && cpanm -qn --installdeps .)
 	perl _tools/create-release-pullrequest
 
-commands_gen.go: commands.go
-	go get github.com/motemen/go-cli/gen
-	go generate
-
 clean:
 	rm -f build/$(MACKEREL_AGENT_NAME) build-linux-amd64/$(MACKEREL_AGENT_NAME) build-linux-386/$(MACKEREL_AGENT_NAME)
 	go clean
-	rm -f commands_gen.go
 
-generate: commands_gen.go
-
-.PHONY: test build run deps clean lint crossbuild cover rpm deb tgz generate crossbuild-package crossbuild-package-kcps crossbuild-package-stage rpm-v1 rpm-v2 rpm-stage rpm-stage-v1 rpm-stage-v2 rpm-kcps-v1 rpm-kcps-v2 deb-v1 deb-v2 deb-kcps deb-kcps-v1 deb-kcps-v2 deb-stage deb-stage-v1 deb-stage-v2 release check-release-deps
+.PHONY: test build run deps clean lint crossbuild cover rpm deb tgz crossbuild-package crossbuild-package-kcps crossbuild-package-stage rpm-v1 rpm-v2 rpm-stage rpm-stage-v1 rpm-stage-v2 rpm-kcps-v1 rpm-kcps-v2 deb-v1 deb-v2 deb-kcps deb-kcps-v1 deb-kcps-v2 deb-stage deb-stage-v1 deb-stage-v2 release check-release-deps

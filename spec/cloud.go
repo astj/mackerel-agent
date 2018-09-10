@@ -1,15 +1,21 @@
 package spec
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/Songmu/retry"
 	"github.com/mackerelio/golib/logging"
+	"github.com/mackerelio/mackerel-client-go"
+
+	"github.com/mackerelio/mackerel-agent/config"
 )
 
 // This Generator collects metadata about cloud instances.
@@ -29,36 +35,68 @@ type CloudMetaGenerator interface {
 	SuggestCustomIdentifier() (string, error)
 }
 
-// Key is a root key for the generator.
-func (g *CloudGenerator) Key() string {
-	return "cloud"
-}
-
 var cloudLogger = logging.GetLogger("spec.cloud")
 
 var ec2BaseURL, gceMetaURL, azureVMBaseURL *url.URL
 
 func init() {
 	ec2BaseURL, _ = url.Parse("http://169.254.169.254/latest/meta-data")
-	gceMetaURL, _ = url.Parse("http://metadata.google.internal/computeMetadata/v1/?recursive=true")
+	gceMetaURL, _ = url.Parse("http://metadata.google.internal./computeMetadata/v1/?recursive=true")
 	azureVMBaseURL, _ = url.Parse("http://169.254.169.254/metadata/instance")
 }
 
-var timeout = 100 * time.Millisecond
+var timeout = 3 * time.Second
 
 // SuggestCloudGenerator returns suitable CloudGenerator
-func SuggestCloudGenerator() *CloudGenerator {
-	if isEC2() {
+func SuggestCloudGenerator(conf *config.Config) *CloudGenerator {
+	// if CloudPlatform is specified, return corresponding one
+	switch conf.CloudPlatform {
+	case config.CloudPlatformNone:
+		return nil
+	case config.CloudPlatformEC2:
 		return &CloudGenerator{&EC2Generator{ec2BaseURL}}
-	}
-	if isGCE() {
+	case config.CloudPlatformGCE:
 		return &CloudGenerator{&GCEGenerator{gceMetaURL}}
-	}
-	if isAzure() {
+	case config.CloudPlatformAzureVM:
 		return &CloudGenerator{&AzureVMGenerator{azureVMBaseURL}}
 	}
 
-	return nil
+	var wg sync.WaitGroup
+	gCh := make(chan *CloudGenerator, 3)
+
+	// cancelable context
+	ctx, cancel := context.WithCancel(context.Background())
+
+	wg.Add(3)
+	go func() {
+		if isEC2(ctx) {
+			gCh <- &CloudGenerator{&EC2Generator{ec2BaseURL}}
+			cancel()
+		}
+		wg.Done()
+	}()
+	go func() {
+		if isGCE(ctx) {
+			gCh <- &CloudGenerator{&GCEGenerator{gceMetaURL}}
+			cancel()
+		}
+		wg.Done()
+	}()
+	go func() {
+		if isAzure(ctx) {
+			gCh <- &CloudGenerator{&AzureVMGenerator{azureVMBaseURL}}
+			cancel()
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		wg.Wait()
+		// close so that `<-gCh` will receive nul
+		close(gCh)
+	}()
+
+	return <-gCh
 }
 
 func httpCli() *http.Client {
@@ -71,30 +109,38 @@ func httpCli() *http.Client {
 	}
 }
 
-func isGCE() bool {
-	_, err := requestGCEMeta()
+func isGCE(ctx context.Context) bool {
+	err := retry.WithContext(ctx, 2, 2*time.Second, func() error {
+		_, err := requestGCEMeta(ctx)
+		return err
+	})
 	return err == nil
 }
 
 // Note: May want to check without using the API.
-func isAzure() bool {
-	cl := httpCli()
-	// '/vmId` is probably Azure VM specific URL
-	req, err := http.NewRequest("GET", azureVMBaseURL.String()+"/compute/vmId?api-version=2017-04-02&format=text", nil)
-	if err != nil {
-		return false
-	}
-	req.Header.Set("Metadata", "true")
+func isAzure(ctx context.Context) bool {
+	isAzure := false
+	err := retry.WithContext(ctx, 2, 2*time.Second, func() error {
+		cl := httpCli()
+		// '/vmId` is probably Azure VM specific URL
+		req, err := http.NewRequest("GET", azureVMBaseURL.String()+"/compute/vmId?api-version=2017-04-02&format=text", nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Metadata", "true")
 
-	resp, err := cl.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode == 200
+		resp, err := cl.Do(req.WithContext(ctx))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		isAzure = resp.StatusCode == 200
+		return nil
+	})
+	return err == nil && isAzure
 }
 
-func requestGCEMeta() ([]byte, error) {
+func requestGCEMeta(ctx context.Context) ([]byte, error) {
 	cl := httpCli()
 	req, err := http.NewRequest("GET", gceMetaURL.String(), nil)
 	if err != nil {
@@ -102,7 +148,7 @@ func requestGCEMeta() ([]byte, error) {
 	}
 	req.Header.Set("Metadata-Flavor", "Google")
 
-	resp, err := cl.Do(req)
+	resp, err := cl.Do(req.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -159,34 +205,35 @@ func (g *EC2Generator) Generate() (interface{}, error) {
 		}
 	}
 
-	results := make(map[string]interface{})
-	results["provider"] = "ec2"
-	results["metadata"] = metadata
-
-	return results, nil
+	return &mackerel.Cloud{Provider: "ec2", MetaData: metadata}, nil
 }
 
 // SuggestCustomIdentifier suggests the identifier of the EC2 instance
 func (g *EC2Generator) SuggestCustomIdentifier() (string, error) {
-	cl := httpCli()
-	key := "instance-id"
-	resp, err := cl.Get(g.baseURL.String() + "/" + key)
-	if err != nil {
-		return "", fmt.Errorf("error while retrieving instance-id")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("failed to request instance-id. response code: %d", resp.StatusCode)
-	}
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("results of requesting instance-id cannot be read: '%s'", err)
-	}
-	instanceID := string(body)
-	if instanceID == "" {
-		return "", fmt.Errorf("invalid instance id")
-	}
-	return instanceID + ".ec2.amazonaws.com", nil
+	identifier := ""
+	err := retry.Retry(3, 2*time.Second, func() error {
+		cl := httpCli()
+		key := "instance-id"
+		resp, err := cl.Get(g.baseURL.String() + "/" + key)
+		if err != nil {
+			return fmt.Errorf("error while retrieving instance-id")
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("failed to request instance-id. response code: %d", resp.StatusCode)
+		}
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("results of requesting instance-id cannot be read: '%s'", err)
+		}
+		instanceID := string(body)
+		if instanceID == "" {
+			return fmt.Errorf("invalid instance id")
+		}
+		identifier = instanceID + ".ec2.amazonaws.com"
+		return nil
+	})
+	return identifier, err
 }
 
 // GCEGenerator generate for GCE
@@ -196,7 +243,7 @@ type GCEGenerator struct {
 
 // Generate collects metadata from cloud platform.
 func (g *GCEGenerator) Generate() (interface{}, error) {
-	bytes, err := requestGCEMeta()
+	bytes, err := requestGCEMeta(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -244,12 +291,8 @@ func (g gceMeta) toGeneratorMeta() map[string]string {
 	return meta
 }
 
-func (g gceMeta) toGeneratorResults() interface{} {
-	results := make(map[string]interface{})
-	results["provider"] = "gce"
-	results["metadata"] = g.toGeneratorMeta()
-
-	return results
+func (g gceMeta) toGeneratorResults() *mackerel.Cloud {
+	return &mackerel.Cloud{Provider: "gce", MetaData: g.toGeneratorMeta()}
 }
 
 // SuggestCustomIdentifier for GCE is not implemented yet
@@ -283,11 +326,7 @@ func (g *AzureVMGenerator) Generate() (interface{}, error) {
 	metadata = retrieveAzureVMMetadata(metadata, g.baseURL.String(), "/compute/", metadataComputeKeys)
 	metadata = retrieveAzureVMMetadata(metadata, g.baseURL.String(), "/network/interface/0/ipv4/ipAddress/0/", ipAddressKeys)
 
-	results := make(map[string]interface{})
-	results["provider"] = "AzureVM"
-	results["metadata"] = metadata
-
-	return results, nil
+	return &mackerel.Cloud{Provider: "AzureVM", MetaData: metadata}, nil
 }
 
 func retrieveAzureVMMetadata(metadataMap map[string]string, baseURL string, urlSuffix string, keys map[string]string) map[string]string {
@@ -326,29 +365,34 @@ func retrieveAzureVMMetadata(metadataMap map[string]string, baseURL string, urlS
 
 // SuggestCustomIdentifier suggests the identifier of the Azure VM instance
 func (g *AzureVMGenerator) SuggestCustomIdentifier() (string, error) {
-	cl := httpCli()
-	req, err := http.NewRequest("GET", azureVMBaseURL.String()+"/compute/vmId?api-version=2017-04-02&format=text", nil)
-	if err != nil {
-		return "", fmt.Errorf("error while retrieving vmId")
-	}
-	req.Header.Set("Metadata", "true")
+	identifier := ""
+	err := retry.Retry(3, 2*time.Second, func() error {
+		cl := httpCli()
+		req, err := http.NewRequest("GET", azureVMBaseURL.String()+"/compute/vmId?api-version=2017-04-02&format=text", nil)
+		if err != nil {
+			return fmt.Errorf("error while retrieving vmId")
+		}
+		req.Header.Set("Metadata", "true")
 
-	resp, err := cl.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error while retrieving vmId")
-	}
-	defer resp.Body.Close()
+		resp, err := cl.Do(req)
+		if err != nil {
+			return fmt.Errorf("error while retrieving vmId")
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("failed to request vmId. response code: %d", resp.StatusCode)
-	}
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("results of requesting vmId cannot be read: '%s'", err)
-	}
-	instanceID := string(body)
-	if instanceID == "" {
-		return "", fmt.Errorf("invalid instance id")
-	}
-	return instanceID + ".virtual_machine.azure.microsoft.com", nil
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("failed to request vmId. response code: %d", resp.StatusCode)
+		}
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("results of requesting vmId cannot be read: '%s'", err)
+		}
+		instanceID := string(body)
+		if instanceID == "" {
+			return fmt.Errorf("invalid instance id")
+		}
+		identifier = instanceID + ".virtual_machine.azure.microsoft.com"
+		return nil
+	})
+	return identifier, err
 }

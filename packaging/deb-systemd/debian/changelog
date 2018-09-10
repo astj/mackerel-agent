@@ -1,3 +1,191 @@
+mackerel-agent (0.56.1-1.systemd) stable; urgency=low
+
+  * Do HTTP retry on determining cloud platform and suggesting customIdentifier (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/516>
+  * [windows] Add timeout to WMI query for disk metrics (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/511>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Thu, 30 Aug 2018 10:45:51 +0900
+
+mackerel-agent (0.56.0-1.systemd) stable; urgency=low
+
+  * Fix starting order of Windows Service (by mattn)
+    <https://github.com/mackerelio/mackerel-agent/pull/506>
+  * Auto retire with shutdown on Windows (by mattn)
+    <https://github.com/mackerelio/mackerel-agent/pull/505>
+  * Use RunWithEnv instead of os.Setenv to avoid environment variable races (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/507>
+  * Improve debug messages for check monitoring actions (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/510>
+  * add mssql-plugin in windows msi (by daiksy)
+    <https://github.com/mackerelio/mackerel-agent/pull/509>
+  * Replace GCE metadata endpoint with absolute FQDN (by i2tsuki)
+    <https://github.com/mackerelio/mackerel-agent/pull/508>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 25 Jul 2018 12:44:33 +0900
+
+mackerel-agent (0.55.0-1.systemd) stable; urgency=low
+
+  * improve PATH handling (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/501>
+  * Build with Go 1.10 (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/500>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 20 Jun 2018 11:00:55 +0900
+
+mackerel-agent (0.54.1-1.systemd) stable; urgency=low
+
+  * Support UUID in little-endian format on EC2 detection (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/496>
+  * change the message level from WARNING to INFO when customIdentifier is not registered (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/493>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 28 Mar 2018 15:35:56 +0900
+
+mackerel-agent (0.54.0-1.systemd) stable; urgency=low
+
+  * fix isEC2 (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/494>
+  * care `MemAvailable` in collecting metrics around memory on linux (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/491>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Tue, 20 Mar 2018 11:59:20 +0900
+
+mackerel-agent (0.53.0-1.systemd) stable; urgency=low
+
+  * Stop collecting memory.available for now (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/490>
+  * omit `/Volumes/` from collected `df` values on darwin (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/489>
+  * Enhance diagnostic mode (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/486>
+  * Fix EC2 check for KVM based EC2 instance (e.g. c5 instance) (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/488>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Thu, 15 Mar 2018 10:29:20 +0900
+
+mackerel-agent (0.52.1-1.systemd) stable; urgency=low
+
+  * context support in cmdutil (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/485>
+  * Improve error handling when executing commands (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/484>
+  * extend timeout for retrieving cloud metadata (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/483>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Thu, 01 Mar 2018 14:22:41 +0900
+
+mackerel-agent (0.52.0-1.systemd) stable; urgency=low
+
+  * Refine metrics collector (by mechairoi)
+    <https://github.com/mackerelio/mackerel-agent/pull/442>
+  *  Add `memo` option to check plugin config (by mechairoi)
+    <https://github.com/mackerelio/mackerel-agent/pull/480>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Thu, 08 Feb 2018 10:48:21 +0900
+
+mackerel-agent (0.51.0-1.systemd) stable; urgency=low
+
+  * Fix metric values of pagefile total and pagefile free on Windows (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/456>
+  * update rpm-v2 task for building Amazon Linux 2 package (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/475>
+  * Care plugins that handle timeout signal(SIGTERM) (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/476>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Tue, 23 Jan 2018 11:18:21 +0900
+
+mackerel-agent (0.50.1-1.systemd) stable; urgency=low
+
+  * Add mkr to dependencies to include it into windows msi (by shibayu36)
+    <https://github.com/mackerelio/mackerel-agent/pull/478>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Mon, 15 Jan 2018 17:28:59 +0900
+
+mackerel-agent (0.50.0-1.systemd) stable; urgency=low
+
+  * use supervisor mode in sysvinit script for crash recovery (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/472>
+  * include mkr into windows msi (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/465>
+  * pass returned value from command.RunOnce so that `mackerel-agent once… (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/474>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Mon, 15 Jan 2018 10:52:28 +0900
+
+mackerel-agent (0.49.0-1.systemd) stable; urgency=low
+
+  * cut out `cmdutil` package from `util` and interface adjustment (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/470>
+  * Ignore connection configurations in mackerel-agent.conf (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/463>
+  * fix error check in TestStart of start_test.go (by Ken2mer)
+    <https://github.com/mackerelio/mackerel-agent/pull/471>
+  * [fix] `action` command in `checks` is able to have an individual timeout settings (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/469>
+  * Add an option of timeout duration for executing command (by taku-k)
+    <https://github.com/mackerelio/mackerel-agent/pull/460>
+  * Adjust appveyor.yml (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/466>
+  * introduce goxz (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/468>
+  * using os.Executable() for getting executable path on windows environment (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/464>
+  * include commands_gen.go in repo for go-gettability (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/467>
+  * Ignore veth in network I/O metrics on Linux. (Docker creats a lot) (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/462>
+  * Ignore device-mapper in disk I/O metrics on Linux. (Docker creats a lot) (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/461>
+  * Ignore devicemapper (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/459>
+  * Ignore empty hostid file (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/458>
+  * add check-uptime.exe on msi (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/455>
+  * fix the retry of check reports (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/453>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 10 Jan 2018 16:13:40 +0900
+
+mackerel-agent (0.48.2-1.systemd) stable; urgency=low
+
+  * Fix network interface spec collector on Windows (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/452>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 20 Dec 2017 11:10:33 +0900
+
+mackerel-agent (0.48.1-1.systemd) stable; urgency=low
+
+  * fix a bug when action of check-plugin was not specified (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/450>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 13 Dec 2017 12:10:06 +0900
+
+mackerel-agent (0.48.0-1.systemd) stable; urgency=low
+
+  * Set environment variables for plugins (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/448>
+  * Add an option to declare cloud platform explicitly (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/447>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Tue, 12 Dec 2017 12:41:00 +0900
+
+mackerel-agent (0.47.3-1.systemd) stable; urgency=low
+
+  * Fix interface metrics of large counter values on Linux (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/445>
+  * Refine license notice (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/444>
+  * Improve plugin command parsing error message (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/443>
+  * Log stderr and err of check action (by mechairoi)
+    <https://github.com/mackerelio/mackerel-agent/pull/432>
+  * Commonize interface generators for Linux, Darwin and add support for BSD systems (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/441>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Tue, 28 Nov 2017 12:56:51 +0900
+
 mackerel-agent (0.47.2-1.systemd) stable; urgency=low
 
   * Use go 1.9.2 (by astj)

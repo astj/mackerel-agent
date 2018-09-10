@@ -3,7 +3,7 @@ services:
 - docker
 language: go
 go:
-- 1.9.x
+- 1.11.x
 env:
   global:
   - PATH=/home/travis/gopath/bin:$PATH DEBIAN_FRONTEND=noninteractive
@@ -19,6 +19,7 @@ install:
 - mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 script:
 - make lint
+- make convention
 - make cover
 - test `gofmt -l . | wc -l` = 0
 - make crossbuild

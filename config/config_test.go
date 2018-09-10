@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 var sampleConfig = `
@@ -19,31 +20,46 @@ diagnostic = true
 [filesystems]
 ignore = "/dev/ram.*"
 
-[connection]
-post_metrics_retry_delay_seconds = 600
-post_metrics_retry_max = 5
-
 [plugin.metrics.mysql]
 command = "ruby /path/to/your/plugin/mysql.rb"
 user = "mysql"
 custom_identifier = "app1.example.com"
+timeout_seconds = 60
 
 [plugin.metrics.mysql2]
 command = "ruby /path/to/your/plugin/mysql.rb"
 include_pattern = '^mysql\.innodb\..+'
 exclude_pattern = '^mysql\.innodb\.ignore'
 
+[plugin.metrics.mysql3]
+command = "ruby /path/to/your/plugin/mysql.rb"
+env = { "MYSQL_USERNAME" = "USERNAME", "MYSQL_PASSWORD" = "PASSWORD" }
+
 [plugin.checks.heartbeat]
 command = "heartbeat.sh"
 user = "xyz"
 notification_interval = 60
 max_check_attempts = 3
+timeout_seconds = 60
 action = { command = "cardiac_massage", user = "doctor" }
+
+[plugin.checks.heartbeat2]
+command = "heartbeat.sh"
+env = { "ES_HOSTS" = "10.45.3.2:9220,10.45.3.1:9230" }
+action = { command = "cardiac_massage", user = "doctor", env = { "NAME_1" = "VALUE_1", "NAME_2" = "VALUE_2", "NAME_3" = "VALUE_3" } }
+
+[plugin.checks.heartbeat3]
+command = "heartbeat.sh"
 
 [plugin.metadata.hostinfo]
 command = "hostinfo.sh"
 user = "zzz"
 execution_interval = 60
+timeout_seconds = 60
+
+[plugin.metadata.hostinfo2]
+command = "hostinfo.sh"
+env = { "NAME_1" = "VALUE_1" }
 `
 
 func TestLoadConfig(t *testing.T) {
@@ -76,18 +92,6 @@ func TestLoadConfig(t *testing.T) {
 
 	if config.Filesystems.UseMountpoint != false {
 		t.Error("should be false (default value should be used)")
-	}
-
-	if config.Connection.PostMetricsDequeueDelaySeconds != 30 {
-		t.Error("should be 30 (default value should be used)")
-	}
-
-	if config.Connection.PostMetricsRetryDelaySeconds != 180 {
-		t.Error("should be 180 (max retry delay seconds is 180)")
-	}
-
-	if config.Connection.PostMetricsRetryMax != 5 {
-		t.Error("should be 5 (config value should be used)")
 	}
 }
 
@@ -175,6 +179,184 @@ func TestLoadConfigWithInvalidIgnoreRegexp(t *testing.T) {
 	}
 }
 
+var sampleConfigWithInvalidMetricsCommand = `
+apikey = "abcde"
+
+[plugin.metrics.mysql]
+command = 100
+user = "mysql"
+`
+
+func TestLoadConfigWithInvalidMetricsCommand(t *testing.T) {
+	tmpFile, err := newTempFileWithContent(sampleConfigWithInvalidMetricsCommand)
+	if err != nil {
+		t.Errorf("should not raise error: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, err = LoadConfig(tmpFile.Name())
+	if err == nil {
+		t.Errorf("should raise error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "should be string or string slice, but int64") {
+		t.Errorf("should raise error containing type information: %v", err)
+	}
+	if !strings.Contains(err.Error(), "plugin.metrics.mysql") {
+		t.Errorf("should raise error containing metrics key: %v", err)
+	}
+}
+
+var sampleConfigWithInvalidCheckCommand = `
+apikey = "abcde"
+
+[plugin.checks.dice]
+`
+
+func TestLoadConfigWithInvalidCheckCommand(t *testing.T) {
+	tmpFile, err := newTempFileWithContent(sampleConfigWithInvalidCheckCommand)
+	if err != nil {
+		t.Errorf("should not raise error: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, err = LoadConfig(tmpFile.Name())
+	if err == nil {
+		t.Errorf("should raise error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "should be string or string slice, but <nil>") {
+		t.Errorf("should raise error containing type information: %v", err)
+	}
+	if !strings.Contains(err.Error(), "plugin.checks.dice") {
+		t.Errorf("should raise error containing metrics key: %v", err)
+	}
+}
+
+var sampleConfigWithTooLargeCheckMemo = `
+apikey = "abcde"
+
+[plugin.checks.memo]
+command = "memo"
+memo = "あいうえお"
+
+[plugin.checks.toolargememo]
+command = "toolargememo"
+memo = "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+
+[plugin.checks.toolargememo2]
+command = "toolargememo"
+memo = "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678あいう"
+`
+
+func TestLoadConfigWithTooLargeCheckMemo(t *testing.T) {
+	tmpFile, err := newTempFileWithContent(sampleConfigWithTooLargeCheckMemo)
+	if err != nil {
+		t.Errorf("should not raise error: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	config, err := LoadConfig(tmpFile.Name())
+
+	if err != nil {
+		t.Errorf("should not raise error: %v", err)
+	}
+
+	check1 := config.CheckPlugins["memo"]
+	if *check1.Memo != "あいうえお" {
+		t.Errorf("check command should be 'あいうえお': %v", *check1.Memo)
+	}
+
+	check2 := config.CheckPlugins["toolargememo"]
+	if *check2.Memo != "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" {
+		t.Errorf("check command should have starting 250 charcters: %v", *check2.Memo)
+	}
+
+	check3 := config.CheckPlugins["toolargememo2"]
+	if *check3.Memo != "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678あ" {
+		t.Errorf("check command should have starting 250 charcters: %v", *check3.Memo)
+	}
+}
+
+var sampleConfigWithInvalidMetadataCommand = `
+apikey = "abcde"
+
+[plugin.metadata.sample]
+command = [ 10, 20, 30 ]
+`
+
+func TestLoadConfigWithInvalidMetadataCommand(t *testing.T) {
+	tmpFile, err := newTempFileWithContent(sampleConfigWithInvalidMetadataCommand)
+	if err != nil {
+		t.Errorf("should not raise error: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, err = LoadConfig(tmpFile.Name())
+	if err == nil {
+		t.Errorf("should raise error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "should be string or string slice, but []interface {}") {
+		t.Errorf("should raise error containing type information: %v", err)
+	}
+	if !strings.Contains(err.Error(), "plugin.metadata.sample") {
+		t.Errorf("should raise error containing metrics key: %v", err)
+	}
+}
+
+var sampleConfigWithCloudPlatformTemplate = `
+apikey = "abcde"
+cloud_platform = "%s"
+`
+
+var LoadConfigWithCloudPlatformTests = []struct {
+	value    string
+	expected CloudPlatform
+}{
+	{"", CloudPlatformAuto},
+	{"auto", CloudPlatformAuto},
+	{"none", CloudPlatformNone},
+	{"ec2", CloudPlatformEC2},
+	{"gce", CloudPlatformGCE},
+	{"azurevm", CloudPlatformAzureVM},
+}
+
+func TestLoadConfigWithCloudPlatform(t *testing.T) {
+	for _, test := range LoadConfigWithCloudPlatformTests {
+		content := fmt.Sprintf(sampleConfigWithCloudPlatformTemplate, test.value)
+		tmpFile, err := newTempFileWithContent(content)
+		if err != nil {
+			t.Errorf("should not raise error: %v", err)
+		}
+		defer os.Remove(tmpFile.Name())
+
+		config, err := LoadConfig(tmpFile.Name())
+		if err != nil {
+			t.Errorf("should not raise error: %v", err)
+		}
+
+		if config.CloudPlatform != test.expected {
+			t.Errorf("CloudPlatform should be set to %s, but %s", test.expected, config.CloudPlatform)
+		}
+	}
+}
+
+var sampleConfigWithInvalidCloudPlatform = `
+apikey = "abcde"
+cloud_platform = "unknown"
+`
+
+func TestLoadConfigWithInvalidCloudPlatform(t *testing.T) {
+	tmpFile, err := newTempFileWithContent(sampleConfigWithInvalidCloudPlatform)
+	if err != nil {
+		t.Errorf("should not raise error: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, err = LoadConfig(tmpFile.Name())
+	if err == nil {
+		t.Errorf("should raise error: %v", err)
+	}
+}
+
 func TestLoadConfigFile(t *testing.T) {
 	tmpFile, err := newTempFileWithContent(sampleConfig)
 	if err != nil {
@@ -199,10 +381,6 @@ func TestLoadConfigFile(t *testing.T) {
 		t.Error("Diagnostic should be true")
 	}
 
-	if config.Connection.PostMetricsRetryMax != 5 {
-		t.Error("PostMetricsRetryMax should be 5")
-	}
-
 	if config.MetricPlugins == nil {
 		t.Error("plugin should have metrics")
 	}
@@ -215,6 +393,9 @@ func TestLoadConfigFile(t *testing.T) {
 	}
 	if *pluginConf.CustomIdentifier != "app1.example.com" {
 		t.Errorf("plugin custom_identifier should be 'app1.example.com' but got %v", *pluginConf.CustomIdentifier)
+	}
+	if pluginConf.Command.TimeoutDuration != 60*time.Second {
+		t.Error("plugin timeout_seconds should be 60s")
 	}
 	customIdentifiers := config.ListCustomIdentifiers()
 	if len(customIdentifiers) != 1 {
@@ -238,6 +419,20 @@ func TestLoadConfigFile(t *testing.T) {
 		t.Errorf("unexpected exclude_pattern: %v", pluginConf2.ExcludePattern)
 	}
 
+	pluginConf3 := config.MetricPlugins["mysql3"]
+	if pluginConf3.Command.Env == nil {
+		t.Error("config should have env")
+	}
+	if len(pluginConf3.Command.Env) != 2 {
+		t.Errorf("env should have 2 keys: %v", pluginConf3.Command.Env)
+	}
+	if !expectContainsString(pluginConf3.Command.Env, "MYSQL_USERNAME=USERNAME") {
+		t.Errorf("Command.Env should contain 'MYSQL_USERNAME=USERNAME'")
+	}
+	if !expectContainsString(pluginConf3.Command.Env, "MYSQL_PASSWORD=PASSWORD") {
+		t.Errorf("Command.Env should contain 'MYSQL_PASSWORD=PASSWORD'")
+	}
+
 	if config.CheckPlugins == nil {
 		t.Error("plugin should have checks")
 	}
@@ -247,6 +442,9 @@ func TestLoadConfigFile(t *testing.T) {
 	}
 	if checks.Command.User != "xyz" {
 		t.Error("check user_name should be 'xyz'")
+	}
+	if checks.Command.TimeoutDuration != 60*time.Second {
+		t.Error("check timeout_seconds should be 60s")
 	}
 	if *checks.NotificationInterval != 60 {
 		t.Error("notification_interval should be 60")
@@ -261,6 +459,34 @@ func TestLoadConfigFile(t *testing.T) {
 		t.Error("action.user should be 'doctor'")
 	}
 
+	checks2 := config.CheckPlugins["heartbeat2"]
+	if checks2.Command.Env == nil {
+		t.Error("config should have env of check plugin")
+	}
+	if len(checks2.Command.Env) != 1 {
+		t.Errorf("env of check plugin should have a key: %v", checks2.Command.Env)
+	}
+	if !expectContainsString(checks2.Command.Env, "ES_HOSTS=10.45.3.2:9220,10.45.3.1:9230") {
+		t.Errorf("Command.Env should contain 'ES_HOSTS=10.45.3.2:9220,10.45.3.1:9230'")
+	}
+	if checks2.Action.Env == nil {
+		t.Error("config should have action.env of check plugin")
+	}
+	if len(checks2.Action.Env) != 3 {
+		t.Errorf("action.env of check plugin should have 3 keys: %v", checks2.Action.Env)
+	}
+	if !expectContainsString(checks2.Action.Env, "NAME_1=VALUE_1") {
+		t.Errorf("Command.Env should contain 'NAME_1=VALUE_1'")
+	}
+	if !expectContainsString(checks2.Action.Env, "NAME_2=VALUE_2") {
+		t.Errorf("Command.Env should contain 'NAME_2=VALUE_2'")
+	}
+
+	checks3 := config.CheckPlugins["heartbeat3"]
+	if checks3.Action != nil {
+		t.Error("config should not have action of check plugin")
+	}
+
 	if config.MetadataPlugins == nil {
 		t.Error("config should have metadata plugin list")
 	}
@@ -273,6 +499,21 @@ func TestLoadConfigFile(t *testing.T) {
 	}
 	if *metadataPlugin.ExecutionInterval != 60 {
 		t.Errorf("execution interval of metadata plugin should be 60 but got '%v'", *metadataPlugin.ExecutionInterval)
+	}
+	if metadataPlugin.Command.TimeoutDuration != 60*time.Second {
+		t.Errorf("timeout duration of metadata plugin should be 60s, but got '%v'",
+			metadataPlugin.Command.TimeoutDuration)
+	}
+
+	metadataPlugin2 := config.MetadataPlugins["hostinfo2"]
+	if metadataPlugin2.Command.Env == nil {
+		t.Error("config should have env of metadata plugin")
+	}
+	if len(metadataPlugin2.Command.Env) != 1 {
+		t.Errorf("env of metadata plugin should have a key: %v", metadataPlugin2.Command.Env)
+	}
+	if !expectContainsString(metadataPlugin2.Command.Env, "NAME_1=VALUE_1") {
+		t.Errorf("Command.Env should contain 'NAME_1=VALUE_1'")
 	}
 
 	if config.Plugin != nil {
@@ -417,6 +658,13 @@ func TestFileSystemHostIDStorage(t *testing.T) {
 
 	_, err = s.LoadHostID()
 	assert(t, err != nil, "LoadHostID after DeleteSavedHostID must fail")
+
+	// Write an empty id to simulate a case that could not save id properly
+	err = s.SaveHostID("")
+	assertNoError(t, err)
+
+	_, err = s.LoadHostID()
+	assert(t, err != nil, "LoadHostID from empty HostID file must fail")
 }
 
 func TestConfig_HostIDStorage(t *testing.T) {
@@ -474,6 +722,122 @@ command = ["perl", "-E", "say 'Hello'"]
 	}
 }
 
+func TestEnv_ConvertToStrings(t *testing.T) {
+	cases := []struct {
+		env         Env
+		expected    []string
+		expectError bool
+	}{
+		{Env{}, []string{}, false},
+		{Env{"KEY": "VALUE"}, []string{"KEY=VALUE"}, false},
+		{Env{"KEY1": "VALUE1", "KEY2": "VALUE2", "KEY3": "VALUE3"}, []string{"KEY1=VALUE1", "KEY2=VALUE2", "KEY3=VALUE3"}, false},
+		{Env{"KEY1": "VALUE1 VALUE2 VALUE3", "KEY2": "VALUE4 VALUE5 VALUE6"}, []string{"KEY1=VALUE1 VALUE2 VALUE3", "KEY2=VALUE4 VALUE5 VALUE6"}, false},
+		{Env{"KEY": ""}, []string{"KEY="}, false},
+		{Env{"   KEY   ": "   VALUE   "}, []string{"KEY=   VALUE   "}, false},
+		{Env{"": ""}, []string{}, false},
+		{Env{"KEY=KEY": "VALUE"}, nil, true},
+	}
+
+	for _, c := range cases {
+		got, err := c.env.ConvertToStrings()
+		if err != nil && c.expectError == false {
+			t.Errorf("should raise error: %v", c.env)
+		}
+		if len(got) != len(c.expected) {
+			t.Errorf("env strings should contains %d keys but: %d", len(c.expected), len(got))
+		}
+		for _, v := range got {
+			if !expectContainsString(c.expected, v) {
+				t.Errorf("env strings not expected %+v", got)
+			}
+		}
+	}
+}
+
+func TestCommandRunWithEnv(t *testing.T) {
+	tmpf, err := newTempFileWithContent(`
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	fmt.Print(os.Getenv("SAMPLE_KEY1"), os.Getenv("SAMPLE_KEY2"))
+}`)
+	if err != nil {
+		os.Remove(tmpf.Name())
+		t.Fatalf("should not raise error: %s", err)
+	}
+
+	gof := tmpf.Name() + ".go"
+
+	err = os.Rename(tmpf.Name(), gof)
+
+	if err != nil {
+		os.Remove(tmpf.Name())
+		t.Fatalf("should not raise error: %s", err)
+	}
+	defer os.Remove(gof)
+
+	conf := fmt.Sprintf(`
+apikey = "abcde"
+
+[plugin.metrics.sample]
+command = ["go", "run", '%s']
+env = { "SAMPLE_KEY1" = " foo bar ", "SAMPLE_KEY2" = " baz qux " }
+`, gof)
+
+	cases := []struct {
+		env      []string
+		expected string
+	}{
+		{nil, " foo bar  baz qux "},
+		{[]string{"SAMPLE_KEY1=v1 v2", "SAMPLE_KEY2= v3 v4"}, "v1 v2 v3 v4"},
+	}
+
+	for _, c := range cases {
+		var stdout, stderr string
+		var exitCode int
+		var err error
+
+		conff, err := newTempFileWithContent(conf)
+
+		if err != nil {
+			t.Fatalf("should not raise error: %s", err)
+		}
+		defer os.Remove(conff.Name())
+
+		config, err := loadConfigFile(conff.Name())
+		assertNoError(t, err)
+
+		p := config.MetricPlugins["sample"]
+
+		if c.env != nil {
+			stdout, stderr, exitCode, err = p.Command.RunWithEnv(c.env)
+		} else {
+			stdout, stderr, exitCode, err = p.Command.Run()
+		}
+
+		if stdout != c.expected {
+			t.Errorf("stdout not expected: %+v", stdout)
+		}
+
+		if stderr != "" {
+			t.Errorf("stderr not expected: %+v", stderr)
+		}
+
+		if exitCode != 0 {
+			t.Errorf("exitCode not expected: %+v", exitCode)
+		}
+
+		if err != nil {
+			t.Errorf("err not expected: %+v", err)
+		}
+	}
+}
+
 func newTempFileWithContent(content string) (*os.File, error) {
 	tmpf, err := ioutil.TempFile("", "mackerel-config-test")
 	if err != nil {
@@ -486,4 +850,13 @@ func newTempFileWithContent(content string) (*os.File, error) {
 	tmpf.Sync()
 	tmpf.Close()
 	return tmpf, nil
+}
+
+func expectContainsString(slice []string, contains string) bool {
+	for _, v := range slice {
+		if v == contains {
+			return true
+		}
+	}
+	return false
 }
