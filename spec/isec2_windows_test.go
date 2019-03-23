@@ -2,11 +2,9 @@ package spec
 
 import (
 	"context"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"testing"
 )
 
@@ -41,12 +39,12 @@ func TestIsEC2UUID(t *testing.T) {
 
 func TestIsEC2(t *testing.T) {
 	tests := []struct {
-		existsUUIDFiles [2]bool // [0]: as `/sys/hypervisor/uuid`, [1]: as `/sys/devices/virtual/dmi/id/product_uuid`
-		existsAMIId     bool
-		expect          bool
+		existsWmicRecords [2]bool
+		existsAMIId       bool
+		expect            bool
 	}{
 		{
-			existsUUIDFiles: [2]bool{
+			existsWmicRecords: [2]bool{
 				true,
 				true,
 			},
@@ -54,7 +52,7 @@ func TestIsEC2(t *testing.T) {
 			expect:      true,
 		},
 		{
-			existsUUIDFiles: [2]bool{
+			existsWmicRecords: [2]bool{
 				false,
 				true,
 			},
@@ -62,7 +60,7 @@ func TestIsEC2(t *testing.T) {
 			expect:      true,
 		},
 		{
-			existsUUIDFiles: [2]bool{
+			existsWmicRecords: [2]bool{
 				true,
 				false,
 			},
@@ -70,7 +68,7 @@ func TestIsEC2(t *testing.T) {
 			expect:      true,
 		},
 		{
-			existsUUIDFiles: [2]bool{
+			existsWmicRecords: [2]bool{
 				false,
 				false,
 			},
@@ -78,7 +76,7 @@ func TestIsEC2(t *testing.T) {
 			expect:      false,
 		},
 		{
-			existsUUIDFiles: [2]bool{
+			existsWmicRecords: [2]bool{
 				true,
 				true,
 			},
@@ -100,28 +98,16 @@ func TestIsEC2(t *testing.T) {
 			u, _ := url.Parse(ts.URL)
 			defer setEc2BaseURL(u)()
 
-			uuidFiles := make([]string, 0, 2)
-			for _, exist := range tc.existsUUIDFiles {
-				tf, err := ioutil.TempFile("", "")
-				if err != nil {
-					t.Errorf("should not raise error: %s", err)
-				}
-
-				tn := tf.Name()
-				uuidFiles = append(uuidFiles, tn)
-
+			wmiRecords := make([]Win32ComputerSystemProduct, 2)
+			for i, exist := range tc.existsWmicRecords {
 				if exist {
-					defer os.Remove(tn)
+					wmiRecords[i].UUID = "ec2e1916-9099-7caf-fd21-012345abcdef" // valid EC2 UUID
 				} else {
-					os.Remove(tn)
-					continue
+					wmiRecords[i].UUID = "ec1e1916-9099-7caf-fd21-012345abcdef" // invalid EC2 UUID
 				}
-
-				tf.Write([]byte("ec2e1916-9099-7caf-fd21-012345abcdef")) // valid EC2 UUID
-				tf.Close()
 			}
 
-			if isEC2WithSpecifiedUUIDFiles(context.Background(), uuidFiles) != tc.expect {
+			if isEC2WithSpecifiedWmiRecords(context.Background(), wmiRecords) != tc.expect {
 				t.Errorf("isEC2() should be %v: %#v", tc.expect, tc)
 			}
 		}()
