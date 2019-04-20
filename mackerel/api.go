@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mackerelio/golib/logging"
+	mkr "github.com/mackerelio/mackerel-client-go"
 )
 
 var logger = logging.GetLogger("api")
@@ -142,7 +143,7 @@ func closeResp(resp *http.Response) {
 }
 
 // FindHost find the host
-func (api *API) FindHost(id string) (*Host, error) {
+func (api *API) FindHost(id string) (*mkr.Host, error) {
 	resp, err := api.get(fmt.Sprintf("/api/v0/hosts/%s", id), "")
 	defer closeResp(resp)
 	if err != nil {
@@ -154,7 +155,7 @@ func (api *API) FindHost(id string) (*Host, error) {
 	}
 
 	var data struct {
-		Host *Host `json:"host"`
+		Host *mkr.Host `json:"host"`
 	}
 	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
@@ -164,7 +165,7 @@ func (api *API) FindHost(id string) (*Host, error) {
 }
 
 // FindHostByCustomIdentifier find the host by the custom identifier
-func (api *API) FindHostByCustomIdentifier(customIdentifier string) (*Host, error) {
+func (api *API) FindHostByCustomIdentifier(customIdentifier string) (*mkr.Host, error) {
 	v := url.Values{}
 	v.Set("customIdentifier", customIdentifier)
 	for _, status := range []string{"working", "standby", "maintenance", "poweroff"} {
@@ -181,7 +182,7 @@ func (api *API) FindHostByCustomIdentifier(customIdentifier string) (*Host, erro
 	}
 
 	var data struct {
-		Hosts []*Host `json:"hosts"`
+		Hosts []*mkr.Host `json:"hosts"`
 	}
 	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
