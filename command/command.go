@@ -17,6 +17,7 @@ import (
 	"github.com/mackerelio/mackerel-agent/mackerel"
 	"github.com/mackerelio/mackerel-agent/metrics"
 	"github.com/mackerelio/mackerel-agent/spec"
+	mkr "github.com/mackerelio/mackerel-client-go"
 )
 
 var logger = logging.GetLogger("command")
@@ -45,7 +46,7 @@ type AgentMeta struct {
 
 // prepareHost collects specs of the host and sends them to Mackerel server.
 // A unique host-id is returned by the server if one is not specified.
-func prepareHost(conf *config.Config, ameta *AgentMeta, api *mackerel.API) (*mackerel.Host, error) {
+func prepareHost(conf *config.Config, ameta *AgentMeta, api *mackerel.API) (*mkr.Host, error) {
 	doRetry := func(f func() error) {
 		retry.Retry(retryNum, retryInterval, f)
 	}
@@ -73,7 +74,7 @@ func prepareHost(conf *config.Config, ameta *AgentMeta, api *mackerel.API) (*mac
 		return nil, fmt.Errorf("error while collecting host specs: %s", lastErr.Error())
 	}
 
-	var result *mackerel.Host
+	var result *mkr.Host
 	if hostID, err := conf.LoadHostID(); err != nil { // create
 
 		if hostSpec.CustomIdentifier != "" {
@@ -146,8 +147,8 @@ func prepareHost(conf *config.Config, ameta *AgentMeta, api *mackerel.API) (*mac
 
 // prepareCustomIdentiferHosts collects the host information based on the
 // configuration of the custom_identifier fields.
-func prepareCustomIdentiferHosts(conf *config.Config, api *mackerel.API) map[string]*mackerel.Host {
-	customIdentifierHosts := make(map[string]*mackerel.Host)
+func prepareCustomIdentiferHosts(conf *config.Config, api *mackerel.API) map[string]*mkr.Host {
+	customIdentifierHosts := make(map[string]*mkr.Host)
 	for _, customIdentifier := range conf.ListCustomIdentifiers() {
 		host, err := api.FindHostByCustomIdentifier(customIdentifier)
 		if err != nil {
@@ -162,7 +163,7 @@ func prepareCustomIdentiferHosts(conf *config.Config, api *mackerel.API) map[str
 // Interval between each updating host specs.
 var specsUpdateInterval = 1 * time.Hour
 
-func delayByHost(host *mackerel.Host) int {
+func delayByHost(host *mkr.Host) int {
 	s := sha1.Sum([]byte(host.ID))
 	return int(s[len(s)-1]) % int(config.PostMetricsInterval.Seconds())
 }
@@ -171,9 +172,9 @@ func delayByHost(host *mackerel.Host) int {
 type App struct {
 	Agent                 *agent.Agent
 	Config                *config.Config
-	Host                  *mackerel.Host
+	Host                  *mkr.Host
 	API                   *mackerel.API
-	CustomIdentifierHosts map[string]*mackerel.Host
+	CustomIdentifierHosts map[string]*mkr.Host
 	AgentMeta             *AgentMeta
 }
 
@@ -580,10 +581,10 @@ func collectHostSpecs(conf *config.Config, ameta *AgentMeta) (mackerel.HostSpec,
 	meta.AgentRevision = ameta.Revision
 	meta.AgentName = buildUA(ameta.Version, ameta.Revision)
 
-	checks := []mackerel.CheckConfig{}
+	checks := make([]mkr.CheckConfig, 0, len(conf.CheckPlugins))
 	for name, checkPlugin := range conf.CheckPlugins {
 		checks = append(checks,
-			mackerel.CheckConfig{
+			mkr.CheckConfig{
 				Name: name,
 				Memo: checkPlugin.Memo,
 			})

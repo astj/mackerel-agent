@@ -1,3 +1,68 @@
+mackerel-agent (0.59.2-1.systemd) stable; urgency=low
+
+  * trim trailing newlines from command string on windows (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/548>
+  * Improve Makefile (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/547>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 27 Mar 2019 06:44:24 +0000
+
+mackerel-agent (0.59.1-1.systemd) stable; urgency=low
+
+  * fix counter naming problem on Windows (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/544>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 13 Feb 2019 07:54:05 +0000
+
+mackerel-agent (0.59.0-1.systemd) stable; urgency=low
+
+  * Fix decoding error message of executables on Windows (by mattn)
+    <https://github.com/mackerelio/mackerel-agent/pull/539>
+  * Fix detecting EC2 instance on Windows (by mattn)
+    <https://github.com/mackerelio/mackerel-agent/pull/540>
+  * add check-disk plugin for Windows (by susisu)
+    <https://github.com/mackerelio/mackerel-agent/pull/541>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Thu, 10 Jan 2019 15:12:49 +0900
+
+mackerel-agent (0.58.2-1.systemd) stable; urgency=low
+
+  * [windows] Bump mkr to latest  (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/537>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Tue, 27 Nov 2018 14:20:14 +0900
+
+mackerel-agent (0.58.1-1.systemd) stable; urgency=low
+
+  * Fix disk metrics for Linux kernel 4.19 (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/535>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Mon, 26 Nov 2018 15:21:19 +0900
+
+mackerel-agent (0.58.0-1.systemd) stable; urgency=low
+
+  * To work in BusyBox (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/526>
+  * [incompatible] CollectDfValues only from local file systems on linux (by Songmu)
+    <https://github.com/mackerelio/mackerel-agent/pull/532>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Mon, 12 Nov 2018 11:26:48 +0900
+
+mackerel-agent (0.57.0-1.systemd) stable; urgency=low
+
+  * update Code Signing Certificate. (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/524>
+  * Build with Go 1.11 (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/522>
+  * [darwin] Fix iostat output parsing in CPU usage generator (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/520>
+  * [darwin] fix filesystem metrics for APFS vm partition volume (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/517>
+  * add loadavg1 and loadavg15 (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/519>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Fri, 14 Sep 2018 10:53:39 +0900
+
 mackerel-agent (0.56.1-1.systemd) stable; urgency=low
 
   * Do HTTP retry on determining cloud platform and suggesting customIdentifier (by astj)

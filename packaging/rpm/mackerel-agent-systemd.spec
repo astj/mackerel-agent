@@ -55,6 +55,35 @@ systemctl enable %{name}.service
 %config(noreplace) %{_sysconfdir}/%{name}/%{name}.conf
 
 %changelog
+* Wed Mar 27 2019 <mackerel-developers@hatena.ne.jp> - 0.59.2
+- trim trailing newlines from command string on windows (by Songmu)
+- Improve Makefile (by itchyny)
+
+* Wed Feb 13 2019 <mackerel-developers@hatena.ne.jp> - 0.59.1
+- fix counter naming problem on Windows (by lufia)
+
+* Thu Jan 10 2019 <mackerel-developers@hatena.ne.jp> - 0.59.0
+- Fix decoding error message of executables on Windows (by mattn)
+- Fix detecting EC2 instance on Windows (by mattn)
+- add check-disk plugin for Windows (by susisu)
+
+* Tue Nov 27 2018 <mackerel-developers@hatena.ne.jp> - 0.58.2
+- [windows] Bump mkr to latest  (by astj)
+
+* Mon Nov 26 2018 <mackerel-developers@hatena.ne.jp> - 0.58.1
+- Fix disk metrics for Linux kernel 4.19 (by itchyny)
+
+* Mon Nov 12 2018 <mackerel-developers@hatena.ne.jp> - 0.58.0
+- To work in BusyBox (by Songmu)
+- [incompatible] CollectDfValues only from local file systems on linux (by Songmu)
+
+* Fri Sep 14 2018 <mackerel-developers@hatena.ne.jp> - 0.57.0
+- update Code Signing Certificate. (by hayajo)
+- Build with Go 1.11 (by astj)
+- [darwin] Fix iostat output parsing in CPU usage generator (by itchyny)
+- [darwin] fix filesystem metrics for APFS vm partition volume (by itchyny)
+- add loadavg1 and loadavg15 (by itchyny)
+
 * Thu Aug 30 2018 <mackerel-developers@hatena.ne.jp> - 0.56.1
 - Do HTTP retry on determining cloud platform and suggesting customIdentifier (by astj)
 - [windows] Add timeout to WMI query for disk metrics (by astj)

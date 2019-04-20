@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.59.2 (2019-03-27)
+
+* trim trailing newlines from command string on windows #548 (Songmu)
+* Improve Makefile #547 (itchyny)
+
+
+## 0.59.1 (2019-02-13)
+
+* fix counter naming problem on Windows #544 (lufia)
+
+
+## 0.59.0 (2019-01-10)
+
+* Fix decoding error message of executables on Windows #539 (mattn)
+* Fix detecting EC2 instance on Windows #540 (mattn)
+* add check-disk plugin for Windows #541 (susisu)
+
+
+## 0.58.2 (2018-11-27)
+
+* [windows] Bump mkr to latest  #537 (astj)
+
+
+## 0.58.1 (2018-11-26)
+
+* Fix disk metrics for Linux kernel 4.19 #535 (itchyny)
+
+
+## 0.58.0 (2018-11-12)
+
+* To work in BusyBox #526 (Songmu)
+* [incompatible] CollectDfValues only from local file systems on linux #532 (Songmu)
+
+
+## 0.57.0 (2018-09-14)
+
+* update Code Signing Certificate. #524 (hayajo)
+* Build with Go 1.11 #522 (astj)
+* [darwin] Fix iostat output parsing in CPU usage generator #520 (itchyny)
+* [darwin] fix filesystem metrics for APFS vm partition volume #517 (itchyny)
+* add loadavg1 and loadavg15 #519 (itchyny)
+
+
 ## 0.56.1 (2018-08-30)
 
 * Do HTTP retry on determining cloud platform and suggesting customIdentifier #516 (astj)
