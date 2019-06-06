@@ -607,6 +607,10 @@ func collectHostParam(conf *config.Config, ameta *AgentMeta) (mkr.CreateHostPara
 
 	checks := make([]mkr.CheckConfig, 0, len(conf.CheckPlugins))
 	for name, checkPlugin := range conf.CheckPlugins {
+		// Exclude checks with customIdentifiers, which is not for the host itself.
+		if checkPlugin.CustomIdentifier != nil {
+			continue
+		}
 		checks = append(checks,
 			mkr.CheckConfig{
 				Name: name,
