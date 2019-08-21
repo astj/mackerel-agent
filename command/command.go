@@ -1,6 +1,7 @@
 package command
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
@@ -62,14 +63,14 @@ func prepareHost(conf *config.Config, ameta *AgentMeta, api *mackerel.API) (*mkr
 				logger.Warningf("%s", msg)
 			}
 		}
-		if apiErr, ok := err.(*mackerel.Error); ok && apiErr.IsClientError() {
+		if mackerel.IsClientError(err) {
 			// don't retry when client error (APIKey error etc.) occurred
 			return nil
 		}
 		return err
 	}
 
-	hostSpec, lastErr := collectHostSpecs(conf, ameta)
+	hostParam, lastErr := collectHostParam(conf, ameta)
 	if lastErr != nil {
 		return nil, fmt.Errorf("error while collecting host specs: %s", lastErr.Error())
 	}
@@ -77,9 +78,9 @@ func prepareHost(conf *config.Config, ameta *AgentMeta, api *mackerel.API) (*mkr
 	var result *mkr.Host
 	if hostID, err := conf.LoadHostID(); err != nil { // create
 
-		if hostSpec.CustomIdentifier != "" {
+		if hostParam.CustomIdentifier != "" {
 			retry.Retry(3, 2*time.Second, func() error {
-				result, lastErr = api.FindHostByCustomIdentifier(hostSpec.CustomIdentifier)
+				result, lastErr = api.FindHostByCustomIdentifier(hostParam.CustomIdentifier)
 				return filterErrorForRetry(lastErr)
 			})
 			if result != nil {
@@ -91,7 +92,7 @@ func prepareHost(conf *config.Config, ameta *AgentMeta, api *mackerel.API) (*mkr
 			logger.Debugf("Registering new host on mackerel...")
 
 			doRetry(func() error {
-				hostID, lastErr = api.CreateHost(hostSpec)
+				hostID, lastErr = api.CreateHost(hostParam)
 				return filterErrorForRetry(lastErr)
 			})
 
@@ -118,11 +119,11 @@ func prepareHost(conf *config.Config, ameta *AgentMeta, api *mackerel.API) (*mkr
 			}
 			return nil, fmt.Errorf("failed to find this host on mackerel: %s", lastErr.Error())
 		}
-		if result.CustomIdentifier != "" && result.CustomIdentifier != hostSpec.CustomIdentifier {
+		if result.CustomIdentifier != "" && result.CustomIdentifier != hostParam.CustomIdentifier {
 			if fsStorage, ok := conf.HostIDStorage.(*config.FileSystemHostIDStorage); ok {
-				return nil, fmt.Errorf("custom identifiers mismatch: this host = \"%s\", the host whose id is \"%s\" on mackerel.io = \"%s\" (File \"%s\" may be copied from another host. Try deleting it and restarting agent)", hostSpec.CustomIdentifier, hostID, result.CustomIdentifier, fsStorage.HostIDFile())
+				return nil, fmt.Errorf("custom identifiers mismatch: this host = \"%s\", the host whose id is \"%s\" on mackerel.io = \"%s\" (File \"%s\" may be copied from another host. Try deleting it and restarting agent)", hostParam.CustomIdentifier, hostID, result.CustomIdentifier, fsStorage.HostIDFile())
 			}
-			return nil, fmt.Errorf("custom identifiers mismatch: this host = \"%s\", the host whose id is \"%s\" on mackerel.io = \"%s\" (Host ID file may be copied from another host. Try deleting it and restarting agent)", hostSpec.CustomIdentifier, hostID, result.CustomIdentifier)
+			return nil, fmt.Errorf("custom identifiers mismatch: this host = \"%s\", the host whose id is \"%s\" on mackerel.io = \"%s\" (Host ID file may be copied from another host. Try deleting it and restarting agent)", hostParam.CustomIdentifier, hostID, result.CustomIdentifier)
 		}
 	}
 
@@ -179,11 +180,11 @@ type App struct {
 }
 
 type postValue struct {
-	values   []*mackerel.CreatingMetricsValue
+	values   []*mkr.HostMetricValue
 	retryCnt int
 }
 
-func newPostValue(values []*mackerel.CreatingMetricsValue) *postValue {
+func newPostValue(values []*mkr.HostMetricValue) *postValue {
 	return &postValue{values, 0}
 }
 
@@ -198,14 +199,14 @@ const (
 )
 
 func loop(app *App, termCh chan struct{}) error {
-	quit := make(chan struct{})
-	defer close(quit) // broadcast terminating
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Periodically update host specs.
-	go updateHostSpecsLoop(app, quit)
+	go updateHostSpecsLoop(ctx, app)
 
 	postQueue := make(chan *postValue, postMetricsBufferSize)
-	go enqueueLoop(app, postQueue, quit)
+	go enqueueLoop(ctx, app, postQueue)
 
 	postDelaySeconds := delayByHost(app.Host)
 	initialDelay := postDelaySeconds / 2
@@ -245,11 +246,11 @@ func loop(app *App, termCh chan struct{}) error {
 	}()
 
 	if hasChecks {
-		go runCheckersLoop(app, termCheckerCh, quit)
+		go runCheckersLoop(ctx, app, termCheckerCh)
 	}
 
 	if hasMetadataPlugins {
-		go runMetadataLoop(app, termMetadataCh, quit)
+		go runMetadataLoop(ctx, app, termMetadataCh)
 	}
 
 	lState := loopStateFirst
@@ -315,11 +316,11 @@ func loop(app *App, termCh chan struct{}) error {
 				lState = loopStateTerminating
 			}
 
-			postValues := [](*mackerel.CreatingMetricsValue){}
+			var postValues []*mkr.HostMetricValue
 			for _, v := range origPostValues {
 				postValues = append(postValues, v.values...)
 			}
-			err := app.API.PostMetricsValues(postValues)
+			err := app.API.PostHostMetricValues(postValues)
 			if err != nil {
 				logger.Warningf("Failed to post metrics value (will retry): %s", err.Error())
 				if lState != loopStateTerminating {
@@ -353,11 +354,11 @@ func loop(app *App, termCh chan struct{}) error {
 	}
 }
 
-func updateHostSpecsLoop(app *App, quit chan struct{}) {
+func updateHostSpecsLoop(ctx context.Context, app *App) {
 	for {
 		app.UpdateHostSpecs()
 		select {
-		case <-quit:
+		case <-ctx.Done():
 			return
 		case <-time.After(specsUpdateInterval):
 			// nop
@@ -365,15 +366,15 @@ func updateHostSpecsLoop(app *App, quit chan struct{}) {
 	}
 }
 
-func enqueueLoop(app *App, postQueue chan *postValue, quit chan struct{}) {
-	metricsResult := app.Agent.Watch(quit)
+func enqueueLoop(ctx context.Context, app *App, postQueue chan *postValue) {
+	metricsResult := app.Agent.Watch(ctx)
 	for {
 		select {
-		case <-quit:
+		case <-ctx.Done():
 			return
 		case result := <-metricsResult:
-			created := float64(result.Created.Unix())
-			creatingValues := [](*mackerel.CreatingMetricsValue){}
+			created := result.Created.Unix()
+			var creatingValues []*mkr.HostMetricValue
 			for _, values := range result.Values {
 				hostID := app.Host.ID
 				if values.CustomIdentifier != nil {
@@ -391,11 +392,13 @@ func enqueueLoop(app *App, postQueue chan *postValue, quit chan struct{}) {
 
 					creatingValues = append(
 						creatingValues,
-						&mackerel.CreatingMetricsValue{
+						&mkr.HostMetricValue{
 							HostID: hostID,
-							Name:   name,
-							Time:   created,
-							Value:  value,
+							MetricValue: &mkr.MetricValue{
+								Name:  name,
+								Time:  created,
+								Value: value,
+							},
 						},
 					)
 				}
@@ -406,7 +409,7 @@ func enqueueLoop(app *App, postQueue chan *postValue, quit chan struct{}) {
 	}
 }
 
-func runChecker(checker *checks.Checker, checkReportCh chan *checks.Report, reportImmediateCh chan struct{}, quit <-chan struct{}) {
+func runChecker(ctx context.Context, checker *checks.Checker, checkReportCh chan *checks.Report, reportImmediateCh chan struct{}) {
 	lastStatus := checks.StatusUndefined
 	lastMessage := ""
 	interval := checker.Interval()
@@ -460,7 +463,7 @@ func runChecker(checker *checks.Checker, checkReportCh chan *checks.Report, repo
 
 			lastStatus = report.Status
 			lastMessage = report.Message
-		case <-quit:
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -469,13 +472,13 @@ func runChecker(checker *checks.Checker, checkReportCh chan *checks.Report, repo
 // runCheckersLoop generates "checker" goroutines
 // which run for each checker commands and one for HTTP POSTing
 // the reports to Mackerel API.
-func runCheckersLoop(app *App, termCheckerCh <-chan struct{}, quit <-chan struct{}) {
+func runCheckersLoop(ctx context.Context, app *App, termCheckerCh <-chan struct{}) {
 	// Do not block checking.
 	checkReportCh := make(chan *checks.Report, reportCheckBufferSize*len(app.Agent.Checkers))
 	reportImmediateCh := make(chan struct{}, reportCheckBufferSize*len(app.Agent.Checkers))
 
 	for _, checker := range app.Agent.Checkers {
-		go runChecker(checker, checkReportCh, reportImmediateCh, quit)
+		go runChecker(ctx, checker, checkReportCh, reportImmediateCh)
 	}
 
 	exit := false
@@ -516,30 +519,47 @@ func runCheckersLoop(app *App, termCheckerCh <-chan struct{}, quit <-chan struct
 			logger.Debugf("RunChekcerLoop: Extend the delay to %d seconds. There are %d reports.", reportCheckDelay, len(reports))
 		}
 
-		partialReports := make([]*checks.Report, 0, checkReportMaxSize)
-		for i, report := range reports {
-			logger.Debugf("reports[%d]: %#v", i, report)
-			partialReports = append(partialReports, report)
-			if len(partialReports) >= checkReportMaxSize {
-				reportCheckMonitors(app, partialReports)
-				partialReports = make([]*checks.Report, 0, checkReportMaxSize)
+		// "" means no CustomIdentifier, which means the host running this agent itself.
+		reportsByCustomIdentifier := map[string][]*checks.Report{}
+		for _, report := range reports {
+			customIdentifier := ""
+			if report.CustomIdentfier != nil {
+				customIdentifier = *report.CustomIdentfier
+			}
+			if _, exists := reportsByCustomIdentifier[customIdentifier]; !exists {
+				reportsByCustomIdentifier[customIdentifier] = make([]*checks.Report, 0, checkReportMaxSize)
+			}
+			reportsByCustomIdentifier[customIdentifier] = append(reportsByCustomIdentifier[customIdentifier], report)
+			if len(reportsByCustomIdentifier[customIdentifier]) >= checkReportMaxSize {
+				reportCheckMonitors(app, customIdentifier, reportsByCustomIdentifier[customIdentifier])
+				delete(reportsByCustomIdentifier, customIdentifier)
 				time.Sleep(time.Duration(reportCheckDelay) * time.Second)
 			}
 		}
-		reportCheckMonitors(app, partialReports)
+		for customIdentifier, partialReports := range reportsByCustomIdentifier {
+			reportCheckMonitors(app, customIdentifier, partialReports)
+		}
 	}
 }
 
-func reportCheckMonitors(app *App, reports []*checks.Report) {
+func reportCheckMonitors(app *App, customIdentifier string, reports []*checks.Report) {
+	hostID := app.Host.ID
+	if customIdentifier != "" {
+		if host, ok := app.CustomIdentifierHosts[customIdentifier]; ok {
+			hostID = host.ID
+		} else {
+			return
+		}
+	}
 	for {
-		err := app.API.ReportCheckMonitors(app.Host.ID, reports)
+		err := app.API.ReportCheckMonitors(hostID, reports)
 		if err == nil {
 			break
 		}
 
 		logger.Errorf("ReportCheckMonitors: %s", err)
 
-		if apiErr, ok := err.(*mackerel.Error); ok && apiErr.IsClientError() {
+		if mackerel.IsClientError(err) {
 			break
 		}
 
@@ -550,11 +570,11 @@ func reportCheckMonitors(app *App, reports []*checks.Report) {
 	}
 }
 
-// collectHostSpecs collects host specs (correspond to "name", "meta", "interfaces" and "customIdentifier" fields in API v0)
-func collectHostSpecs(conf *config.Config, ameta *AgentMeta) (mackerel.HostSpec, error) {
+// collectHostParam collects host specs (correspond to "name", "meta", "interfaces" and "customIdentifier" fields in API v0)
+func collectHostParam(conf *config.Config, ameta *AgentMeta) (*mkr.CreateHostParam, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return mackerel.HostSpec{}, fmt.Errorf("failed to obtain hostname: %s", err.Error())
+		return nil, fmt.Errorf("failed to obtain hostname: %s", err.Error())
 	}
 
 	specGens := specGenerators()
@@ -574,7 +594,7 @@ func collectHostSpecs(conf *config.Config, ameta *AgentMeta) (mackerel.HostSpec,
 
 	interfaces, err := interfaceGenerator().Generate()
 	if err != nil {
-		return mackerel.HostSpec{}, fmt.Errorf("failed to collect interfaces: %s", err.Error())
+		return nil, fmt.Errorf("failed to collect interfaces: %s", err.Error())
 	}
 
 	meta.AgentVersion = ameta.Version
@@ -583,6 +603,10 @@ func collectHostSpecs(conf *config.Config, ameta *AgentMeta) (mackerel.HostSpec,
 
 	checks := make([]mkr.CheckConfig, 0, len(conf.CheckPlugins))
 	for name, checkPlugin := range conf.CheckPlugins {
+		// Exclude checks with customIdentifiers, which is not for the host itself.
+		if checkPlugin.CustomIdentifier != nil {
+			continue
+		}
 		checks = append(checks,
 			mkr.CheckConfig{
 				Name: name,
@@ -590,7 +614,7 @@ func collectHostSpecs(conf *config.Config, ameta *AgentMeta) (mackerel.HostSpec,
 			})
 	}
 
-	return mackerel.HostSpec{
+	return &mkr.CreateHostParam{
 		Name:             hostname,
 		Meta:             meta,
 		Interfaces:       interfaces,
@@ -605,14 +629,13 @@ func collectHostSpecs(conf *config.Config, ameta *AgentMeta) (mackerel.HostSpec,
 func (app *App) UpdateHostSpecs() {
 	logger.Debugf("Updating host specs...")
 
-	hostSpec, err := collectHostSpecs(app.Config, app.AgentMeta)
+	hostParam, err := collectHostParam(app.Config, app.AgentMeta)
 	if err != nil {
 		logger.Errorf("While collecting host specs: %s", err)
 		return
 	}
 
-	err = app.API.UpdateHost(app.Host.ID, hostSpec)
-
+	_, err = app.API.UpdateHost(app.Host.ID, (*mkr.UpdateHostParam)(hostParam))
 	if err != nil {
 		logger.Errorf("Error while updating host specs: %s", err)
 	} else {
@@ -630,10 +653,10 @@ func NewMackerelClient(apibase, apikey, ver, rev string, verbose bool) (*mackere
 	if err != nil {
 		return nil, err
 	}
-	api.UA = buildUA(ver, rev)
-	api.DefaultHeaders = http.Header{}
-	api.DefaultHeaders.Add("X-Agent-Version", ver)
-	api.DefaultHeaders.Add("X-Revision", rev)
+	api.UserAgent = buildUA(ver, rev)
+	api.AdditionalHeaders = make(http.Header)
+	api.AdditionalHeaders.Add("X-Agent-Version", ver)
+	api.AdditionalHeaders.Add("X-Revision", rev)
 	return api, nil
 }
 
@@ -679,8 +702,8 @@ func RunOnce(conf *config.Config, ameta *AgentMeta) error {
 	return nil
 }
 
-func runOncePayload(conf *config.Config, ameta *AgentMeta) ([]mackerel.CreateGraphDefsPayload, *mackerel.HostSpec, *agent.MetricsResult, error) {
-	hostSpec, err := collectHostSpecs(conf, ameta)
+func runOncePayload(conf *config.Config, ameta *AgentMeta) ([]*mkr.GraphDefsParam, *mkr.CreateHostParam, *agent.MetricsResult, error) {
+	hostParam, err := collectHostParam(conf, ameta)
 	if err != nil {
 		logger.Errorf("While collecting host specs: %s", err)
 		return nil, nil, nil, err
@@ -694,7 +717,7 @@ func runOncePayload(conf *config.Config, ameta *AgentMeta) ([]mackerel.CreateGra
 	ag := NewAgent(conf)
 	graphdefs := ag.CollectGraphDefsOfPlugins()
 	metrics := ag.CollectMetrics(time.Now())
-	return graphdefs, &hostSpec, metrics, nil
+	return graphdefs, hostParam, metrics, nil
 }
 
 // NewAgent creates a new instance of agent.Agent from its configuration conf.

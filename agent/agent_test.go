@@ -1,12 +1,13 @@
 package agent
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/mackerelio/mackerel-agent/config"
-	"github.com/mackerelio/mackerel-agent/mackerel"
 	"github.com/mackerelio/mackerel-agent/metrics"
+	mkr "github.com/mackerelio/mackerel-client-go"
 )
 
 type fakeGenerator struct {
@@ -28,7 +29,7 @@ func (f *fakePluginGenerator) Generate() (metrics.Values, error) {
 	return f.FakeGenerate()
 }
 
-func (f *fakePluginGenerator) PrepareGraphDefs() ([]mackerel.CreateGraphDefsPayload, error) {
+func (f *fakePluginGenerator) PrepareGraphDefs() ([]*mkr.GraphDefsParam, error) {
 	return nil, nil
 }
 
@@ -58,8 +59,8 @@ func TestAgent_Watch(t *testing.T) {
 	// we cannot set interval less than 1 second
 	config.PostMetricsInterval = 1 * time.Second
 
-	quit := make(chan struct{})
-	metricsResult := ag.Watch(quit)
+	ctx := context.Background()
+	metricsResult := ag.Watch(ctx)
 
 	cnt := 0
 	end := time.After(5 * time.Second)

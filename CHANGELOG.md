@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.62.0 (2019-07-30)
+
+* Allow working directory configuration in env of metadata plugins #585 (itchyny)
+* Remove tempdir in tests #588 (astj)
+* Remove memory.active and inactive metrics #584 (itchyny)
+* Check command name on pid check for pid confliction after OS restart #583 (itchyny)
+* change the owner of files created in docker #587 (hayajo)
+* Fix to fit #557 into our workflow. #577 (hayajo)
+* Add mips and arm64 architecture debian packaging support #557 (tnishinaga)
+
+
+## 0.61.1 (2019-07-23)
+
+* Set rpm dist to ".el7.centos", not ".el7" in rpm-v2 #581 (astj)
+
+
+## 0.61.0 (2019-07-22)
+
+* Generate and include CREDITS file in the release artifacts #575 (itchyny)
+* Migrate docker repository #572 (hayajo)
+* [check-plugin] Support custom_identifier  #571 (astj)
+* Stop unnecessary builds #569 (lufia)
+* Care newer busybox #570 (astj)
+* migrate to mackerel.Client #566 (lufia)
+
+
+## 0.60.0 (2019-06-11)
+
+* migrate CreatingMetricsValue to mackerel.HostMetricValue #565 (lufia)
+* migrate to use mkr.GraphDefsParam instead of CreateGraphDefsPayload #564 (lufia)
+* migrate to use mkr.CheckReports instead of monitoringChecksPayload #563 (lufia)
+* update appveyor.yml to build 64bit binaries #561 (lufia)
+* migrate to use mkr.XxxHostParam instead of mackerel.HostSpec #554 (lufia)
+* support Go Modules #549 (lufia)
+
+
+## 0.59.3 (2019-05-08)
+
+* Add rc script for FreeBSD #559 (owatan)
+* migrate to use mkr.Interface instead of mackerel.NetInterface #553 (lufia)
+* migrate to use mkr.Host instead of mackerel.Host #552 (lufia)
+
+
 ## 0.59.2 (2019-03-27)
 
 * trim trailing newlines from command string on windows #548 (Songmu)

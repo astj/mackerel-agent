@@ -55,6 +55,38 @@ systemctl enable %{name}.service
 %config(noreplace) %{_sysconfdir}/%{name}/%{name}.conf
 
 %changelog
+* Tue Jul 30 2019 <mackerel-developers@hatena.ne.jp> - 0.62.0
+- Allow working directory configuration in env of metadata plugins (by itchyny)
+- Remove tempdir in tests (by astj)
+- Remove memory.active and inactive metrics (by itchyny)
+- Check command name on pid check for pid confliction after OS restart (by itchyny)
+- change the owner of files created in docker (by hayajo)
+- Fix to fit #557 into our workflow. (by hayajo)
+
+* Tue Jul 23 2019 <mackerel-developers@hatena.ne.jp> - 0.61.1
+- Set rpm dist to ".el7.centos", not ".el7" in rpm-v2 (by astj)
+
+* Mon Jul 22 2019 <mackerel-developers@hatena.ne.jp> - 0.61.0
+- Generate and include CREDITS file in the release artifacts (by itchyny)
+- Migrate docker repository (by hayajo)
+- [check-plugin] Support custom_identifier  (by astj)
+- Stop unnecessary builds (by lufia)
+- Care newer busybox (by astj)
+- migrate to mackerel.Client (by lufia)
+
+* Tue Jun 11 2019 <mackerel-developers@hatena.ne.jp> - 0.60.0
+- migrate CreatingMetricsValue to mackerel.HostMetricValue (by lufia)
+- migrate to use mkr.GraphDefsParam instead of CreateGraphDefsPayload (by lufia)
+- migrate to use mkr.CheckReports instead of monitoringChecksPayload (by lufia)
+- update appveyor.yml to build 64bit binaries (by lufia)
+- migrate to use mkr.XxxHostParam instead of mackerel.HostSpec (by lufia)
+- support Go Modules (by lufia)
+
+* Wed May 08 2019 <mackerel-developers@hatena.ne.jp> - 0.59.3
+- Add rc script for FreeBSD (by owatan)
+- migrate to use mkr.Interface instead of mackerel.NetInterface (by lufia)
+- migrate to use mkr.Host instead of mackerel.Host (by lufia)
+
 * Wed Mar 27 2019 <mackerel-developers@hatena.ne.jp> - 0.59.2
 - trim trailing newlines from command string on windows (by Songmu)
 - Improve Makefile (by itchyny)

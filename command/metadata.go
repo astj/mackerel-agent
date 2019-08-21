@@ -1,23 +1,27 @@
 package command
 
 import (
+	"context"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/mackerelio/golib/pluginutil"
 	"github.com/mackerelio/mackerel-agent/config"
+	"github.com/mackerelio/mackerel-agent/mackerel"
 	"github.com/mackerelio/mackerel-agent/metadata"
+	mkr "github.com/mackerelio/mackerel-client-go"
 )
 
 func metadataGenerators(conf *config.Config) []*metadata.Generator {
 	generators := make([]*metadata.Generator, 0, len(conf.MetadataPlugins))
 
-	workdir := pluginutil.PluginWorkDir()
+	workdir := filepath.Join(pluginutil.PluginWorkDir(), "mackerel-metadata")
 	for name, pluginConfig := range conf.MetadataPlugins {
 		generator := &metadata.Generator{
 			Name:      name,
 			Config:    pluginConfig,
-			Cachefile: filepath.Join(workdir, "mackerel-metadata", name),
+			Cachefile: getCacheFileName(name, workdir, pluginConfig),
 		}
 		logger.Debugf("Metadata plugin generator created: %#v %#v", generator, generator.Config)
 		generators = append(generators, generator)
@@ -26,16 +30,36 @@ func metadataGenerators(conf *config.Config) []*metadata.Generator {
 	return generators
 }
 
+// The directory configuration in the env config of metadata should work as
+// same as metric plugins. Since the working directory of metadata plugin is
+// handled by mackerel-agent (not the plugin process), we have to lookup here.
+func lookupPluginWorkDir(env []string) string {
+	workDirPrefix := "MACKEREL_PLUGIN_WORKDIR="
+	for _, e := range env {
+		if strings.HasPrefix(e, workDirPrefix) {
+			return strings.TrimPrefix(e, workDirPrefix)
+		}
+	}
+	return ""
+}
+
+func getCacheFileName(name, defaultWorkDir string, plugin *config.MetadataPlugin) string {
+	if dir := lookupPluginWorkDir(plugin.Command.Env); dir != "" {
+		return filepath.Join(dir, "mackerel-plugin-metadata-"+name)
+	}
+	return filepath.Join(defaultWorkDir, name)
+}
+
 type metadataResult struct {
 	namespace string
 	metadata  interface{}
 	createdAt time.Time
 }
 
-func runMetadataLoop(app *App, termMetadataCh <-chan struct{}, quit <-chan struct{}) {
+func runMetadataLoop(ctx context.Context, app *App, termMetadataCh <-chan struct{}) {
 	resultCh := make(chan *metadataResult)
 	for _, g := range app.Agent.MetadataGenerators {
-		go runEachMetadataLoop(g, resultCh, quit)
+		go runEachMetadataLoop(ctx, g, resultCh)
 	}
 
 	exit := false
@@ -66,10 +90,11 @@ func runMetadataLoop(app *App, termMetadataCh <-chan struct{}, quit <-chan struc
 		}
 
 		for _, result := range results {
-			resp, err := app.API.PutMetadata(app.Host.ID, result.namespace, result.metadata)
+			err := app.API.PutHostMetaData(app.Host.ID, result.namespace, result.metadata)
 			// retry on 5XX errors
-			if resp != nil && resp.StatusCode >= 500 {
-				logger.Errorf("put metadata %q failed: status %s", result.namespace, resp.Status)
+			if mackerel.IsServerError(err) {
+				e := err.(*mkr.APIError)
+				logger.Errorf("put metadata %q failed: status %s", result.namespace, e.StatusCode)
 				go func() {
 					resultCh <- result
 				}()
@@ -94,7 +119,7 @@ func clearMetadataCache(generators []*metadata.Generator, namespace string) {
 	}
 }
 
-func runEachMetadataLoop(g *metadata.Generator, resultCh chan<- *metadataResult, quit <-chan struct{}) {
+func runEachMetadataLoop(ctx context.Context, g *metadata.Generator, resultCh chan<- *metadataResult) {
 	interval := g.Interval()
 	nextInterval := 10 * time.Second
 	nextTime := time.Now()
@@ -131,7 +156,7 @@ func runEachMetadataLoop(g *metadata.Generator, resultCh chan<- *metadataResult,
 				createdAt: time.Now(),
 			}
 
-		case <-quit:
+		case <-ctx.Done():
 			return
 		}
 	}

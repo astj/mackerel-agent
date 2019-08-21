@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sort"
 	"sync"
 	"testing"
@@ -47,9 +48,9 @@ func TestDelayByHost(t *testing.T) {
 type jsonObject map[string]interface{}
 
 // newMockAPIServer makes a dummy root directry, a mock API server, a conf.Config to using them
-// and returns the Config, mock handlers map and the server.
+// and returns the Config, mock handlers map, the server and cleanup function which should be called finally.
 // The mock handlers map is "<method> <path>"-to-jsonObject-generator map.
-func newMockAPIServer(t *testing.T) (config.Config, map[string]func(*http.Request) (int, jsonObject), *httptest.Server) {
+func newMockAPIServer(t *testing.T) (config.Config, map[string]func(*http.Request) (int, jsonObject), *httptest.Server, func()) {
 	mockHandlers := map[string]func(*http.Request) (int, jsonObject){}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -84,12 +85,15 @@ func newMockAPIServer(t *testing.T) (config.Config, map[string]func(*http.Reques
 		Root:    root,
 	}
 
-	return conf, mockHandlers, ts
+	return conf, mockHandlers, ts, func() {
+		ts.Close()
+		os.RemoveAll(root)
+	}
 }
 
 func TestPrepareWithCreate(t *testing.T) {
-	conf, mockHandlers, ts := newMockAPIServer(t)
-	defer ts.Close()
+	conf, mockHandlers, ts, deferFunc := newMockAPIServer(t)
+	defer deferFunc()
 
 	mockHandlers["POST /api/v0/hosts"] = func(req *http.Request) (int, jsonObject) {
 		return 200, jsonObject{
@@ -126,8 +130,8 @@ func TestPrepareWithCreate(t *testing.T) {
 }
 
 func TestPrepareWithCreateWithFail(t *testing.T) {
-	conf, mockHandlers, ts := newMockAPIServer(t)
-	defer ts.Close()
+	conf, mockHandlers, _, deferFunc := newMockAPIServer(t)
+	defer deferFunc()
 
 	mockHandlers["POST /api/v0/hosts"] = func(req *http.Request) (int, jsonObject) {
 		return 403, jsonObject{
@@ -149,8 +153,8 @@ func TestPrepareWithCreateWithFail(t *testing.T) {
 }
 
 func TestPrepareWithUpdate(t *testing.T) {
-	conf, mockHandlers, ts := newMockAPIServer(t)
-	defer ts.Close()
+	conf, mockHandlers, ts, deferFunc := newMockAPIServer(t)
+	defer deferFunc()
 	tempDir, _ := ioutil.TempDir("", "")
 	conf.Root = tempDir
 	conf.SaveHostID("xxx12345678901")
@@ -189,32 +193,58 @@ func TestPrepareWithUpdate(t *testing.T) {
 	}
 }
 
-func TestCollectHostSpecs(t *testing.T) {
+func TestCollectHostParam(t *testing.T) {
 	conf := config.Config{}
-	hostSpec, err := collectHostSpecs(&conf, &AgentMeta{})
+	hostParam, err := collectHostParam(&conf, &AgentMeta{})
 
 	if err != nil {
-		t.Errorf("collectHostSpecs should not fail: %s", err)
+		t.Errorf("collectHostParam should not fail: %s", err)
 	}
 
-	if hostSpec.Name == "" {
+	if hostParam.Name == "" {
 		t.Error("hostname should not be empty")
 	}
 
-	if len(hostSpec.Meta.CPU) == 0 {
+	if len(hostParam.Meta.CPU) == 0 {
 		t.Error("meta.cpu should exist")
 	}
 
-	if len(hostSpec.Meta.Memory) == 0 {
+	if len(hostParam.Meta.Memory) == 0 {
 		t.Error("meta.memory should exist")
 	}
 
-	if len(hostSpec.Meta.Filesystem) == 0 {
+	if len(hostParam.Meta.Filesystem) == 0 {
 		t.Error("meta.filesystem should exist")
 	}
 
-	if len(hostSpec.Meta.Kernel) == 0 {
+	if len(hostParam.Meta.Kernel) == 0 {
 		t.Error("meta.kernel should exist")
+	}
+}
+
+func TestCollectHostParamWithChecks(t *testing.T) {
+	customIdentifier := "app.example.com"
+	conf := config.Config{
+		CheckPlugins: map[string]*config.CheckPlugin{
+			"chk1": &config.CheckPlugin{
+				CustomIdentifier: nil,
+			},
+			"chk2": &config.CheckPlugin{
+				CustomIdentifier: &customIdentifier,
+			},
+		},
+	}
+	hostParam, err := collectHostParam(&conf, &AgentMeta{})
+
+	if err != nil {
+		t.Errorf("collectHostParam should not fail: %s", err)
+	}
+
+	if len(hostParam.Checks) != 1 {
+		t.Error("only checks without customIdentifier should be included in param")
+	}
+	if hostParam.Checks[0].Name != "chk1" {
+		t.Error("only checks without customIdentifier should be included in param")
 	}
 }
 
@@ -230,7 +260,7 @@ func (g *counterGenerator) Generate() (metrics.Values, error) {
 	return map[string]float64{"dummy.a": float64(g.counter)}, nil
 }
 
-type byTime []mackerel.CreatingMetricsValue
+type byTime []mkr.HostMetricValue
 
 func (b byTime) Len() int           { return len(b) }
 func (b byTime) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
@@ -241,8 +271,8 @@ func TestLoop(t *testing.T) {
 		logging.SetLogLevel(logging.DEBUG)
 	}
 
-	conf, mockHandlers, ts := newMockAPIServer(t)
-	defer ts.Close()
+	conf, mockHandlers, _, deferFunc := newMockAPIServer(t)
+	defer deferFunc()
 
 	if testing.Short() {
 		// Shrink time scale
@@ -277,11 +307,11 @@ func TestLoop(t *testing.T) {
 		totalPosts    = 7
 	)
 	failureCount := 0
-	receivedDataPoints := []mackerel.CreatingMetricsValue{}
+	receivedDataPoints := []mkr.HostMetricValue{}
 	done := make(chan struct{})
 
 	mockHandlers["POST /api/v0/tsdb"] = func(req *http.Request) (int, jsonObject) {
-		payload := []mackerel.CreatingMetricsValue{}
+		payload := []mkr.HostMetricValue{}
 		json.NewDecoder(req.Body).Decode(&payload)
 
 		for _, p := range payload {
@@ -378,8 +408,8 @@ func TestReportCheckMonitors(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		conf, mockHandlers, ts := newMockAPIServer(t)
-		defer ts.Close()
+		conf, mockHandlers, _, deferFunc := newMockAPIServer(t)
+		defer deferFunc()
 
 		if testing.Short() {
 			reportCheckRetryDelaySeconds = 1
@@ -415,7 +445,7 @@ func TestReportCheckMonitors(t *testing.T) {
 		}
 
 		go func() {
-			reportCheckMonitors(app, []*checks.Report{})
+			reportCheckMonitors(app, "", []*checks.Report{})
 		}()
 
 		time.Sleep(time.Duration(reportCheckRetryDelaySeconds) * 3 * time.Second)

@@ -1,3 +1,72 @@
+mackerel-agent (0.62.0-1.systemd) stable; urgency=low
+
+  * Allow working directory configuration in env of metadata plugins (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/585>
+  * Remove tempdir in tests (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/588>
+  * Remove memory.active and inactive metrics (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/584>
+  * Check command name on pid check for pid confliction after OS restart (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/583>
+  * change the owner of files created in docker (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/587>
+  * Fix to fit #557 into our workflow. (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/577>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Tue, 30 Jul 2019 08:31:10 +0000
+
+mackerel-agent (0.61.1-1.systemd) stable; urgency=low
+
+  * Set rpm dist to ".el7.centos", not ".el7" in rpm-v2 (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/581>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Tue, 23 Jul 2019 16:24:08 +0900
+
+mackerel-agent (0.61.0-1.systemd) stable; urgency=low
+
+  * Generate and include CREDITS file in the release artifacts (by itchyny)
+    <https://github.com/mackerelio/mackerel-agent/pull/575>
+  * Migrate docker repository (by hayajo)
+    <https://github.com/mackerelio/mackerel-agent/pull/572>
+  * [check-plugin] Support custom_identifier  (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/571>
+  * Stop unnecessary builds (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/569>
+  * Care newer busybox (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/570>
+  * migrate to mackerel.Client (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/566>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Mon, 22 Jul 2019 13:08:38 +0900
+
+mackerel-agent (0.60.0-1.systemd) stable; urgency=low
+
+  * migrate CreatingMetricsValue to mackerel.HostMetricValue (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/565>
+  * migrate to use mkr.GraphDefsParam instead of CreateGraphDefsPayload (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/564>
+  * migrate to use mkr.CheckReports instead of monitoringChecksPayload (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/563>
+  * update appveyor.yml to build 64bit binaries (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/561>
+  * migrate to use mkr.XxxHostParam instead of mackerel.HostSpec (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/554>
+  * support Go Modules (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/549>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Tue, 11 Jun 2019 03:11:20 +0000
+
+mackerel-agent (0.59.3-1.systemd) stable; urgency=low
+
+  * Add rc script for FreeBSD (by owatan)
+    <https://github.com/mackerelio/mackerel-agent/pull/559>
+  * migrate to use mkr.Interface instead of mackerel.NetInterface (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/553>
+  * migrate to use mkr.Host instead of mackerel.Host (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/552>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 08 May 2019 07:35:51 +0000
+
 mackerel-agent (0.59.2-1.systemd) stable; urgency=low
 
   * trim trailing newlines from command string on windows (by Songmu)
