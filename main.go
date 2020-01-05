@@ -90,6 +90,7 @@ func resolveConfig(fs *flag.FlagSet, argv []string) (*config.Config, error) {
 		root          = fs.String("root", config.DefaultConfig.Root, "Directory containing variable state information")
 		apikey        = fs.String("apikey", "", "(DEPRECATED) API key from mackerel.io web site")
 		diagnostic    = fs.Bool("diagnostic", false, "Enables diagnostic features")
+		autoShutdown  = fs.Bool("private-autoshutdown", false, "(internal use) Shutdown automatically if agent is updated")
 		child         = fs.Bool("child", false, "(internal use) child process of the supervise mode")
 		verbose       bool
 		roleFullnames roleFullnamesFlag
@@ -122,6 +123,8 @@ func resolveConfig(fs *flag.FlagSet, argv []string) (*config.Config, error) {
 			conf.Root = *root
 		case "diagnostic":
 			conf.Diagnostic = *diagnostic
+		case "private-autoshutdown":
+			conf.AutoShutdown = *autoShutdown
 		case "verbose", "v":
 			conf.Verbose = verbose
 		case "role":
@@ -185,6 +188,13 @@ func start(conf *config.Config, termCh chan struct{}) error {
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP)
+	if conf.AutoShutdown {
+		prog, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("can't get executable file: %v", err)
+		}
+		go notifyUpdateFile(c, prog, 10*time.Second)
+	}
 	go signalHandler(c, app, termCh)
 
 	return command.Run(app, termCh)
@@ -218,4 +228,32 @@ func signalHandler(c chan os.Signal, app *command.App, termCh chan struct{}) {
 			}()
 		}
 	}
+}
+
+func notifyUpdateFile(c chan<- os.Signal, file string, interval time.Duration) {
+	var lastUpdated time.Time
+
+	stat, err := os.Stat(file)
+	if err != nil {
+		logger.Errorf("Can't stat %s: %v; last modified time is set to now", file, err)
+		lastUpdated = time.Now()
+	} else {
+		lastUpdated = stat.ModTime()
+	}
+	for {
+		time.Sleep(interval)
+		stat, err := os.Stat(file)
+		if err != nil {
+			if os.IsNotExist(err) {
+				break
+			}
+			logger.Errorf("Can't stat %s: %v", file, err)
+			continue
+		}
+		if stat.ModTime().After(lastUpdated) {
+			break
+		}
+	}
+	logger.Infof("Detected %s was updated; shutting down", file)
+	c <- os.Interrupt
 }

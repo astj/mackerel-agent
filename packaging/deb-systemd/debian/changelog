@@ -1,3 +1,63 @@
+mackerel-agent (0.65.0-1.systemd) stable; urgency=low
+
+  * add -private-autoshutdown option (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/612>
+  * Fix Windows Edition name (by mattn)
+    <https://github.com/mackerelio/mackerel-agent/pull/614>
+  * Bump github.com/shirou/gopsutil from 2.19.10+incompatible to 2.19.11+incompatible (by dependabot-preview[bot])
+    <https://github.com/mackerelio/mackerel-agent/pull/611>
+  * update go-osstat and golang.org/x (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/610>
+  * refactor: improve interface and testing for spec/cloud (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/609>
+  * refactor: Inject CloudMetaGenerators to Suggester in order to test them in safer way (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/608>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Thu, 05 Dec 2019 05:44:09 +0000
+
+mackerel-agent (0.64.1-1.systemd) stable; urgency=low
+
+  * Install development tools in module-aware mode (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/606>
+  * Bump github.com/shirou/gopsutil from 2.18.12+incompatible to 2.19.10+incompatible (by dependabot-preview[bot])
+    <https://github.com/mackerelio/mackerel-agent/pull/602>
+  * Add armhf Debian package to release (by hnw)
+    <https://github.com/mackerelio/mackerel-agent/pull/599>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Thu, 21 Nov 2019 10:32:53 +0000
+
+mackerel-agent (0.64.0-1.systemd) stable; urgency=low
+
+  * Build with Go 1.12.12
+  * stop building 32bit Darwin artifacts (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/600>
+  * Fix wix/mackerel-agent.sample.conf (by ryosms)
+    <https://github.com/mackerelio/mackerel-agent/pull/597>
+  * Pass the check monitoring result message to "action" by env (by a-know)
+    <https://github.com/mackerelio/mackerel-agent/pull/598>
+  * Bump github.com/mackerelio/mackerel-client-go from 0.6.0 to 0.8.0 (by dependabot-preview[bot])
+    <https://github.com/mackerelio/mackerel-agent/pull/595>
+  * add .dependabot/config.yml (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/594>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Thu, 24 Oct 2019 07:30:11 +0000
+
+mackerel-agent (0.63.0-1.systemd) stable; urgency=low
+
+  * avoid to use unnamed NICs for registering hosts on Windows (by lufia)
+    <https://github.com/mackerelio/mackerel-agent/pull/580>
+  * Fixed to create configuration directory directory when executing init command if not exist directory (by homedm)
+    <https://github.com/mackerelio/mackerel-agent/pull/592>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Wed, 11 Sep 2019 14:41:31 +0000
+
+mackerel-agent (0.62.1-1.systemd) stable; urgency=low
+
+  * Update dependencies (by astj)
+    <https://github.com/mackerelio/mackerel-agent/pull/590>
+
+ -- mackerel <mackerel-developers@hatena.ne.jp>  Thu, 29 Aug 2019 01:48:46 +0000
+
 mackerel-agent (0.62.0-1.systemd) stable; urgency=low
 
   * Allow working directory configuration in env of metadata plugins (by itchyny)

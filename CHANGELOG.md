@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.65.0 (2019-12-05)
+
+* add -private-autoshutdown option #612 (lufia)
+* Fix Windows Edition name #614 (mattn)
+* Bump github.com/shirou/gopsutil from 2.19.10+incompatible to 2.19.11+incompatible #611 (dependabot-preview[bot])
+* update go-osstat and golang.org/x #610 (lufia)
+* refactor: improve interface and testing for spec/cloud #609 (astj)
+* refactor: Inject CloudMetaGenerators to Suggester in order to test them in safer way #608 (astj)
+
+
+## 0.64.1 (2019-11-21)
+
+* Install development tools in module-aware mode #606 (lufia)
+* Bump github.com/shirou/gopsutil from 2.18.12+incompatible to 2.19.10+incompatible #602 (dependabot-preview[bot])
+* Add armhf Debian package to release #599 (hnw)
+
+
+## 0.64.0 (2019-10-24)
+
+* Build with Go 1.12.12
+* stop building 32bit Darwin artifacts #600 (astj)
+* Fix wix/mackerel-agent.sample.conf #597 (ryosms)
+* Pass the check monitoring result message to "action" by env #598 (a-know)
+* Bump github.com/mackerelio/mackerel-client-go from 0.6.0 to 0.8.0 #595 (dependabot-preview[bot])
+* add .dependabot/config.yml #594 (lufia)
+
+
+## 0.63.0 (2019-09-11)
+
+* avoid to use unnamed NICs for registering hosts on Windows #580 (lufia)
+* Fixed to create configuration directory directory when executing init command if not exist directory #592 (homedm)
+
+
+## 0.62.1 (2019-08-29)
+
+* Update dependencies #590 (astj)
+
+
 ## 0.62.0 (2019-07-30)
 
 * Allow working directory configuration in env of metadata plugins #585 (itchyny)

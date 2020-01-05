@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,9 +16,101 @@ import (
 	"github.com/mackerelio/mackerel-agent/config"
 )
 
-func TestCloudGenerate(t *testing.T) {
+type mockCloudMetaGenerator struct {
+	metadata         *mackerel.Cloud
+	customIdentifier string
+}
+
+func (g *mockCloudMetaGenerator) Generate() (*mackerel.Cloud, error) {
+	return g.metadata, nil
+}
+
+func (g *mockCloudMetaGenerator) SuggestCustomIdentifier() (string, error) {
+	return g.customIdentifier, nil
+}
+
+type mockAzureCloudMetaGenerator struct {
+	mockCloudMetaGenerator
+	isAzureVM bool
+}
+
+func (g *mockAzureCloudMetaGenerator) IsAzureVM(ctx context.Context) bool {
+	return g.isAzureVM
+}
+
+type mockEC2CloudMetaGenerator struct {
+	mockCloudMetaGenerator
+	isEC2 bool
+}
+
+func (g *mockEC2CloudMetaGenerator) IsEC2(ctx context.Context) bool {
+	return g.isEC2
+}
+
+type mockGCECloudMetaGenerator struct {
+	mockCloudMetaGenerator
+	isGCE bool
+}
+
+func (g *mockGCECloudMetaGenerator) IsGCE(ctx context.Context) bool {
+	return g.isGCE
+}
+
+func TestCloudGenerator(t *testing.T) {
+	generator := &mockCloudMetaGenerator{
+		metadata: &mackerel.Cloud{
+			Provider: "mock",
+			MetaData: map[string]string{
+				"mockKey": "mockValue",
+			},
+		},
+		customIdentifier: "mock-generated-identifier.example.com",
+	}
+	g := &CloudGenerator{generator}
+
+	customIdentifier, err := g.SuggestCustomIdentifier()
+	if err != nil {
+		t.Errorf("should not raise error: %s", err)
+	}
+
+	if customIdentifier != "mock-generated-identifier.example.com" {
+		t.Errorf("Unexpected customIdentifier: %s", customIdentifier)
+	}
+
+	value, err := g.Generate()
+	if err != nil {
+		t.Errorf("should not raise error: %s", err)
+	}
+
+	cloud, typeOk := value.(*mackerel.Cloud)
+	if !typeOk || cloud == nil {
+		t.Errorf("value should be *mackerel.Cloud. %+v", value)
+		return
+	}
+
+	if cloud.Provider != "mock" {
+		t.Errorf("Unexpected Provider: %s", cloud.Provider)
+	}
+
+	metadata, typeOk := cloud.MetaData.(map[string]string)
+	if !typeOk {
+		t.Errorf("MetaData should be map. %+v", cloud.MetaData)
+	}
+
+	if metadata["mockKey"] != "mockValue" {
+		t.Errorf("Unexpected metadata: %s", metadata["mockKey"])
+	}
+}
+
+func TestEC2Generator(t *testing.T) {
 	handler := func(res http.ResponseWriter, req *http.Request) {
-		fmt.Fprint(res, "i-4f90d537")
+		// The REAL path is /latest/meta-data/instance-id.
+		// This odd Path is due to current implementation.
+		if req.URL.Path == "/instance-id" {
+			fmt.Fprint(res, "i-4f90d537")
+		} else {
+			http.Error(res, "not found", 404)
+		}
 	}
 	ts := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		handler(res, req)
@@ -28,16 +121,25 @@ func TestCloudGenerate(t *testing.T) {
 	if err != nil {
 		t.Errorf("should not raise error: %s", err)
 	}
-	g := &CloudGenerator{&EC2Generator{u}}
+	g := &EC2Generator{u}
 
-	value, err := g.Generate()
+	customIdentifier, err := g.SuggestCustomIdentifier()
 	if err != nil {
 		t.Errorf("should not raise error: %s", err)
 	}
 
-	cloud, typeOk := value.(*mackerel.Cloud)
-	if !typeOk {
-		t.Errorf("value should be *mackerel.Cloud. %+v", value)
+	if customIdentifier != "i-4f90d537.ec2.amazonaws.com" {
+		t.Errorf("Unexpected customIdentifier: %s", customIdentifier)
+	}
+
+	cloud, err := g.Generate()
+	if err != nil {
+		t.Errorf("should not raise error: %s", err)
+	}
+
+	if cloud == nil {
+		t.Error("cloud should not be nil")
+		return
 	}
 
 	metadata, typeOk := cloud.MetaData.(map[string]string)
@@ -45,21 +147,12 @@ func TestCloudGenerate(t *testing.T) {
 		t.Errorf("MetaData should be map. %+v", cloud.MetaData)
 	}
 
-	if len(metadata["instance-id"]) == 0 {
-		t.Error("instance-id should be filled")
-	}
-
-	customIdentifier, err := g.SuggestCustomIdentifier()
-	if err != nil {
-		t.Errorf("should not raise error: %s", err)
-	}
-
-	if len(customIdentifier) == 0 {
-		t.Error("customIdentifier should be retrieved")
+	if metadata == nil || metadata["instance-id"] != "i-4f90d537" {
+		t.Errorf("Unexpected metadata: %+v", metadata)
 	}
 }
 
-func TestEC2SuggestCustomIdentifier(t *testing.T) {
+func TestEC2SuggestCustomIdentifier_ChangingHttpStatus(t *testing.T) {
 	i := 0
 	threshold := 100
 	handler := func(res http.ResponseWriter, req *http.Request) {
@@ -79,7 +172,7 @@ func TestEC2SuggestCustomIdentifier(t *testing.T) {
 	if err != nil {
 		t.Errorf("should not raise error: %s", err)
 	}
-	g := &CloudGenerator{&EC2Generator{u}}
+	g := &EC2Generator{u}
 
 	// 404, 404, 404 => give up
 	{
@@ -230,130 +323,120 @@ func TestGCEGenerate(t *testing.T) {
 
 }
 
-func TestSuggestCloudGenerator(t *testing.T) {
-	// All Cloud meta URLs are unreachable
-	unreachableURL, _ := url.Parse("http://unreachable.localhost")
-	ec2BaseURL = unreachableURL
-	gceMetaURL = unreachableURL
-	azureVMBaseURL = unreachableURL
+type slowCloudMetaGenerator struct {
+	mockCloudMetaGenerator
+}
 
+func (g *slowCloudMetaGenerator) IsEC2(ctx context.Context) bool {
+	time.Sleep(2 * time.Second)
+	return true
+}
+
+func (g *slowCloudMetaGenerator) IsGCE(ctx context.Context) bool {
+	time.Sleep(2 * time.Second)
+	return true
+}
+
+func TestCloudGeneratorSuggester(t *testing.T) {
 	conf := config.Config{}
-
-	cGen := SuggestCloudGenerator(&conf)
-	if cGen != nil {
-		t.Errorf("cGen should be nil but, %s", cGen)
-	}
-
-	func() { // ec2BaseURL is reachable but returns 404
-		ts := httptest.NewServer(http.NotFoundHandler())
-		defer ts.Close()
-		u, _ := url.Parse(ts.URL)
-		ec2BaseURL = u
-		defer func() { ec2BaseURL = unreachableURL }()
-
-		cGen = SuggestCloudGenerator(&conf)
+	// none
+	{
+		suggester := &cloudGeneratorSuggester{
+			ec2Generator:     &mockEC2CloudMetaGenerator{isEC2: false},
+			gceGenerator:     &mockGCECloudMetaGenerator{isGCE: false},
+			azureVMGenerator: &mockAzureCloudMetaGenerator{isAzureVM: false},
+		}
+		cGen := suggester.Suggest(&conf)
 		if cGen != nil {
 			t.Errorf("cGen should be nil but, %s", cGen)
 		}
-	}()
+	}
 
-	func() { // suggest GCEGenerator
-		ts := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			fmt.Fprint(res, "GCE:OK")
-		}))
-		defer ts.Close()
-		u, _ := url.Parse(ts.URL)
-		gceMetaURL = u
-		defer func() { gceMetaURL = unreachableURL }()
-
-		cGen = SuggestCloudGenerator(&conf)
+	// EC2
+	{
+		suggester := &cloudGeneratorSuggester{
+			ec2Generator:     &mockEC2CloudMetaGenerator{isEC2: true},
+			gceGenerator:     &mockGCECloudMetaGenerator{isGCE: false},
+			azureVMGenerator: &mockAzureCloudMetaGenerator{isAzureVM: false},
+		}
+		cGen := suggester.Suggest(&conf)
 		if cGen == nil {
 			t.Errorf("cGen should not be nil.")
 		}
 
-		gceGen, ok := cGen.CloudMetaGenerator.(*GCEGenerator)
+		_, ok := cGen.CloudMetaGenerator.(ec2Generator)
 		if !ok {
-			t.Errorf("cGen should be *GCEGenerator")
+			t.Errorf("cGen should be ec2Generator")
 		}
-		if gceGen.metaURL != gceMetaURL {
-			t.Errorf("something went wrong")
+	}
+
+	// GCE
+	{
+		suggester := &cloudGeneratorSuggester{
+			ec2Generator:     &mockEC2CloudMetaGenerator{isEC2: false},
+			gceGenerator:     &mockGCECloudMetaGenerator{isGCE: true},
+			azureVMGenerator: &mockAzureCloudMetaGenerator{isAzureVM: false},
 		}
-	}()
-
-	func() { // suggest AzureVMGenerator
-		ts := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			if req.Header.Get("Metadata") != "true" {
-				http.NotFound(res, req)
-			}
-			fmt.Fprint(res, "ok")
-		}))
-		defer ts.Close()
-		u, _ := url.Parse(ts.URL)
-		azureVMBaseURL = u
-		defer func() { azureVMBaseURL = unreachableURL }()
-
-		cGen = SuggestCloudGenerator(&conf)
+		cGen := suggester.Suggest(&conf)
 		if cGen == nil {
 			t.Errorf("cGen should not be nil.")
 		}
 
-		gen, ok := cGen.CloudMetaGenerator.(*AzureVMGenerator)
+		_, ok := cGen.CloudMetaGenerator.(gceGenerator)
 		if !ok {
-			t.Errorf("cGen should be *AzureVMGenerator")
+			t.Errorf("cGen should be gceGenerator")
 		}
-		if gen.baseURL != azureVMBaseURL {
-			t.Errorf("something went wrong")
+	}
+
+	// AzureVM
+	{
+		suggester := &cloudGeneratorSuggester{
+			ec2Generator:     &mockEC2CloudMetaGenerator{isEC2: false},
+			gceGenerator:     &mockGCECloudMetaGenerator{isGCE: false},
+			azureVMGenerator: &mockAzureCloudMetaGenerator{isAzureVM: true},
 		}
-	}()
-
-	func() { // multiple generators are available, but suggest the first responded one (in this case EC2)
-		// azure. ok immediately
-		tsA := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			fmt.Fprint(res, "ok")
-		}))
-		defer tsA.Close()
-		uA, _ := url.Parse(tsA.URL)
-		azureVMBaseURL = uA
-		// ec2 / gce. ok after 1 second
-		ts := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			time.Sleep(2 * time.Second)
-			fmt.Fprint(res, "ok")
-		}))
-		defer ts.Close()
-		u, _ := url.Parse(ts.URL)
-		ec2BaseURL = u
-		gceMetaURL = u
-		defer func() {
-			ec2BaseURL = unreachableURL
-			gceMetaURL = unreachableURL
-			azureVMBaseURL = unreachableURL
-		}()
-
-		cGen = SuggestCloudGenerator(&conf)
+		cGen := suggester.Suggest(&conf)
 		if cGen == nil {
 			t.Errorf("cGen should not be nil.")
 		}
 
-		_, ok := cGen.CloudMetaGenerator.(*AzureVMGenerator)
+		_, ok := cGen.CloudMetaGenerator.(azureVMGenerator)
 		if !ok {
-			t.Errorf("cGen should be *AzureVMGenerator")
+			t.Errorf("cGen should be azureVMGenerator")
 		}
-	}()
+	}
+
+	// multiple generators are available, but suggest the first responded one (in this case Azure)
+	{
+		suggester := &cloudGeneratorSuggester{
+			ec2Generator:     &slowCloudMetaGenerator{},
+			gceGenerator:     &slowCloudMetaGenerator{},
+			azureVMGenerator: &mockAzureCloudMetaGenerator{isAzureVM: true},
+		}
+		cGen := suggester.Suggest(&conf)
+		if cGen == nil {
+			t.Errorf("cGen should not be nil.")
+		}
+
+		_, ok := cGen.CloudMetaGenerator.(azureVMGenerator)
+		if !ok {
+			t.Errorf("cGen should be azureVMGenerator")
+		}
+	}
 }
 
-func TestSuggestCloudGenerator_CloudPlatformSpecified(t *testing.T) {
-	// All Cloud meta URLs are unreachable
-	unreachableURL, _ := url.Parse("http://unreachable.localhost")
-	ec2BaseURL = unreachableURL
-	gceMetaURL = unreachableURL
-	azureVMBaseURL = unreachableURL
-
+func TestCloudGeneratorSuggester_CloudPlatformSpecified(t *testing.T) {
+	suggester := &cloudGeneratorSuggester{
+		ec2Generator:     &mockEC2CloudMetaGenerator{isEC2: false},
+		gceGenerator:     &mockGCECloudMetaGenerator{isGCE: false},
+		azureVMGenerator: &mockAzureCloudMetaGenerator{isAzureVM: false},
+	}
 	{
 		conf := config.Config{
 			CloudPlatform: config.CloudPlatformNone,
 		}
 
-		cGen := SuggestCloudGenerator(&conf)
+		cGen := suggester.Suggest(&conf)
 		if cGen != nil {
 			t.Errorf("cGen should be nil.")
 		}
@@ -364,14 +447,14 @@ func TestSuggestCloudGenerator_CloudPlatformSpecified(t *testing.T) {
 			CloudPlatform: config.CloudPlatformEC2,
 		}
 
-		cGen := SuggestCloudGenerator(&conf)
+		cGen := suggester.Suggest(&conf)
 		if cGen == nil {
 			t.Errorf("cGen should not be nil.")
 		}
 
-		_, ok := cGen.CloudMetaGenerator.(*EC2Generator)
+		_, ok := cGen.CloudMetaGenerator.(ec2Generator)
 		if !ok {
-			t.Errorf("cGen should be *EC2Generator")
+			t.Errorf("cGen should be ec2Generator")
 		}
 	}
 
@@ -380,14 +463,14 @@ func TestSuggestCloudGenerator_CloudPlatformSpecified(t *testing.T) {
 			CloudPlatform: config.CloudPlatformGCE,
 		}
 
-		cGen := SuggestCloudGenerator(&conf)
+		cGen := suggester.Suggest(&conf)
 		if cGen == nil {
 			t.Errorf("cGen should not be nil.")
 		}
 
-		_, ok := cGen.CloudMetaGenerator.(*GCEGenerator)
+		_, ok := cGen.CloudMetaGenerator.(gceGenerator)
 		if !ok {
-			t.Errorf("cGen should be *GCEGenerator")
+			t.Errorf("cGen should be gceGenerator")
 		}
 	}
 
@@ -396,14 +479,44 @@ func TestSuggestCloudGenerator_CloudPlatformSpecified(t *testing.T) {
 			CloudPlatform: config.CloudPlatformAzureVM,
 		}
 
-		cGen := SuggestCloudGenerator(&conf)
+		cGen := suggester.Suggest(&conf)
 		if cGen == nil {
 			t.Errorf("cGen should not be nil.")
 		}
 
-		_, ok := cGen.CloudMetaGenerator.(*AzureVMGenerator)
+		_, ok := cGen.CloudMetaGenerator.(azureVMGenerator)
 		if !ok {
-			t.Errorf("cGen should be *AzureVMGenerator")
+			t.Errorf("cGen should be azureVMGenerator")
+		}
+	}
+}
+
+func TestCloudGeneratorSuggester_Public(t *testing.T) {
+	{
+		gen, ok := CloudGeneratorSuggester.ec2Generator.(*EC2Generator)
+		if !ok {
+			t.Error("EC2Generator should be injected as ec2Generator")
+		}
+		if gen.baseURL.String() != ec2BaseURL.String() {
+			t.Error("real baseURL should be embedded to ec2Generator")
+		}
+	}
+	{
+		gen, ok := CloudGeneratorSuggester.gceGenerator.(*GCEGenerator)
+		if !ok {
+			t.Error("GCEGenerator should be injected as gceGenerator")
+		}
+		if gen.metaURL.String() != gceMetaURL.String() {
+			t.Error("real metaURL should be embedded to gceGenerator")
+		}
+	}
+	{
+		gen, ok := CloudGeneratorSuggester.azureVMGenerator.(*AzureVMGenerator)
+		if !ok {
+			t.Error("AzureVMGenerator should be injected as azureVMGenerator")
+		}
+		if gen.baseURL.String() != azureVMBaseURL.String() {
+			t.Error("real baseURL should be embedded to azureVMGenerator ")
 		}
 	}
 }

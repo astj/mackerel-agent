@@ -1,6 +1,6 @@
 MACKEREL_AGENT_NAME ?= "mackerel-agent"
 MACKEREL_API_BASE ?= "https://api.mackerelio.com"
-VERSION := 0.62.0
+VERSION := 0.65.0
 CURRENT_REVISION := $(shell git rev-parse --short HEAD)
 ARGS := "-conf=mackerel-agent.conf"
 BUILD_OS_TARGETS := "linux darwin freebsd windows netbsd"
@@ -44,19 +44,19 @@ credits: $(GOBIN)/gocredits
 	gocredits -w .
 
 $(GOBIN)/golint:
-	GO111MODULE=off go get golang.org/x/lint/golint
+	cd && go get golang.org/x/lint/golint
 
 $(GOBIN)/gotestcover:
-	GO111MODULE=off go get github.com/pierrre/gotestcover
+	cd && go get github.com/pierrre/gotestcover
 
 $(GOBIN)/gocredits:
-	GO111MODULE=off go get github.com/Songmu/gocredits/cmd/gocredits
+	cd && go get github.com/Songmu/gocredits/cmd/gocredits
 
 $(GOBIN)/goxz:
-	GO111MODULE=off go get github.com/Songmu/goxz/cmd/goxz
+	cd && go get github.com/Songmu/goxz/cmd/goxz
 
 $(GOBIN)/goveralls:
-	GO111MODULE=off go get github.com/mattn/goveralls
+	cd && go get github.com/mattn/goveralls
 
 .PHONY: lint
 lint: deps
@@ -72,7 +72,11 @@ convention:
 crossbuild: deps credits
 	cp mackerel-agent.sample.conf mackerel-agent.conf
 	goxz -build-ldflags=$(BUILD_LDFLAGS) \
-		-os=linux,darwin,freebsd,netbsd -arch=386,amd64 -d ./snapshot \
+		-os=linux,freebsd,netbsd -arch=386 -d ./snapshot \
+		-include=mackerel-agent.conf \
+		-n $(MACKEREL_AGENT_NAME) -o $(MACKEREL_AGENT_NAME)
+	goxz -build-ldflags=$(BUILD_LDFLAGS) \
+		-os=linux,darwin,freebsd,netbsd -arch=amd64 -d ./snapshot \
 		-include=mackerel-agent.conf \
 		-n $(MACKEREL_AGENT_NAME) -o $(MACKEREL_AGENT_NAME)
 	goxz -build-ldflags=$(BUILD_LDFLAGS) \
@@ -94,7 +98,7 @@ cover: deps
 # We should be installed tools of native architecture.
 .PHONY: crossbuild-package
 crossbuild-package: deps
-	mkdir -p ./build-linux-386 ./build-linux-amd64 ./build-linux-arm64 ./build-linux-mips
+	mkdir -p ./build-linux-386 ./build-linux-amd64 ./build-linux-arm64 ./build-linux-mips ./build-linux-armhf
 	GOOS=linux GOARCH=386 make build
 	mv build/$(MACKEREL_AGENT_NAME) build-linux-386/
 	GOOS=linux GOARCH=amd64 make build
@@ -103,6 +107,8 @@ crossbuild-package: deps
 	mv build/$(MACKEREL_AGENT_NAME) build-linux-arm64/
 	GOOS=linux GOARCH=mips make build
 	mv build/$(MACKEREL_AGENT_NAME) build-linux-mips/
+	GOOS=linux GOARCH=arm GOARM=6 make build # specify ARMv6 for supporting Raspberry Pi 1 / Zero
+	mv build/$(MACKEREL_AGENT_NAME) build-linux-armhf/
 
 .PHONY: crossbuild-package-kcps
 crossbuild-package-kcps:
@@ -161,6 +167,9 @@ deb-v2: crossbuild-package
 	BUILD_DIRECTORY=build-linux-mips BUILD_SYSTEMD=1 MACKEREL_AGENT_NAME=$(MACKEREL_AGENT_NAME) _tools/packaging/prepare-deb-build.sh
 	docker run --rm -v "$(PWD)":/workspace -w /workspace/packaging/deb-build --entrypoint /bin/sh mackerel/docker-mackerel-deb-builder \
 		-c "debuild --no-tgz-check -uc -us -amips; chown $(shell id -u):$(shell id -g) -R /workspace/packaging/deb-build"
+	BUILD_DIRECTORY=build-linux-armhf BUILD_SYSTEMD=1 MACKEREL_AGENT_NAME=$(MACKEREL_AGENT_NAME) _tools/packaging/prepare-deb-build.sh
+	docker run --rm -v "$(PWD)":/workspace -w /workspace/packaging/deb-build --entrypoint /bin/sh mackerel/docker-mackerel-deb-builder \
+		-c "debuild --no-tgz-check -uc -us -aarmhf; chown $(shell id -u):$(shell id -g) -R /workspace/packaging/deb-build"
 
 .PHONY: rpm-kcps
 rpm-kcps: rpm-kcps-v1 rpm-kcps-v2
@@ -263,7 +272,7 @@ release: check-release-deps
 
 .PHONY: clean
 clean:
-	rm -f build/$(MACKEREL_AGENT_NAME) build-linux-amd64/$(MACKEREL_AGENT_NAME) build-linux-386/$(MACKEREL_AGENT_NAME) CREDITS
+	rm -f build/$(MACKEREL_AGENT_NAME) build-linux-{386,amd64,arm64,mips,armhf}/$(MACKEREL_AGENT_NAME) CREDITS
 	go clean
 
 .PHONY: update

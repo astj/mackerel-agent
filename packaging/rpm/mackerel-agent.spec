@@ -62,6 +62,34 @@ fi
 /usr/local/bin/%{name}
 
 %changelog
+* Thu Dec 05 2019 <mackerel-developers@hatena.ne.jp> - 0.65.0
+- add -private-autoshutdown option (by lufia)
+- Fix Windows Edition name (by mattn)
+- Bump github.com/shirou/gopsutil from 2.19.10+incompatible to 2.19.11+incompatible (by dependabot-preview[bot])
+- update go-osstat and golang.org/x (by lufia)
+- refactor: improve interface and testing for spec/cloud (by astj)
+- refactor: Inject CloudMetaGenerators to Suggester in order to test them in safer way (by astj)
+
+* Thu Nov 21 2019 <mackerel-developers@hatena.ne.jp> - 0.64.1
+- Install development tools in module-aware mode (by lufia)
+- Bump github.com/shirou/gopsutil from 2.18.12+incompatible to 2.19.10+incompatible (by dependabot-preview[bot])
+- Add armhf Debian package to release (by hnw)
+
+* Thu Oct 24 2019 <mackerel-developers@hatena.ne.jp> - 0.64.0
+- Build with Go 1.12.12
+- stop building 32bit Darwin artifacts (by astj)
+- Fix wix/mackerel-agent.sample.conf (by ryosms)
+- Pass the check monitoring result message to "action" by env (by a-know)
+- Bump github.com/mackerelio/mackerel-client-go from 0.6.0 to 0.8.0 (by dependabot-preview[bot])
+- add .dependabot/config.yml (by lufia)
+
+* Wed Sep 11 2019 <mackerel-developers@hatena.ne.jp> - 0.63.0
+- avoid to use unnamed NICs for registering hosts on Windows (by lufia)
+- Fixed to create configuration directory directory when executing init command if not exist directory (by homedm)
+
+* Thu Aug 29 2019 <mackerel-developers@hatena.ne.jp> - 0.62.1
+- Update dependencies (by astj)
+
 * Tue Jul 30 2019 <mackerel-developers@hatena.ne.jp> - 0.62.0
 - Allow working directory configuration in env of metadata plugins (by itchyny)
 - Remove tempdir in tests (by astj)
