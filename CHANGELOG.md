@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.67.1 (2020-04-03)
+
+* Bump github.com/shirou/gopsutil from 2.20.1+incompatible to 2.20.2+incompatible #636 (dependabot-preview[bot])
+* fix too late closing the response body #635 (shogo82148)
+* Bump github.com/mackerelio/mackerel-client-go from 0.9.0 to 0.9.1 #634 (dependabot-preview[bot])
+
+
+## 0.67.0 (2020-02-05)
+
+* Bump github.com/shirou/gopsutil from 2.19.12+incompatible to 2.20.1+incompatible #631 (dependabot-preview[bot])
+* Bump github.com/mackerelio/mackerel-client-go from 0.8.0 to 0.9.0 #629 (dependabot-preview[bot])
+* Allow formatted duration in config #624 (itchyny)
+* rename: github.com/motemen/gobump -> github.com/x-motemen/gobump #630 (lufia)
+* Support IMDSv2 for AWS EC2 #627 (shogo82148)
+* `%q` verb of fmt is invalid for map[string]float64 types #628 (shogo82148)
+
+
+## 0.66.0 (2020-01-22)
+
+* Bump github.com/pkg/errors from 0.8.1 to 0.9.1 #623 (dependabot-preview[bot])
+* Bump github.com/shirou/gopsutil from 2.19.11+incompatible to 2.19.12+incompatible #620 (dependabot-preview[bot])
+* Bump github.com/Songmu/prompter from 0.2.0 to 0.3.0 #617 (dependabot-preview[bot])
+* Implement GCEGenerator.SuggestCustomIdentifier #618 (tanatana)
+* fix how to get self executable path for autoshutdown option #616 (lufia)
+
+
 ## 0.65.0 (2019-12-05)
 
 * add -private-autoshutdown option #612 (lufia)
